@@ -70,7 +70,7 @@ class Settings(BaseSettings):
         "image/jpeg,image/jpg,image/png"
     )
     allowed_upload_extensions: str = ".pdf,.csv,.json,.xml,.xls,.xlsx,.docx,.jpg,.jpeg,.png"
-    research_mode: str = "mock"  # mock | cached | live
+    research_mode: str = "mock"  # mock | cached | live  (default mock for safe dev)
     cache_dir: str = "./cache"
     cam_output_dir: str = "./outputs/cam"
     report_bank_name: str = "Intelli-Credit Demo Bank"
@@ -82,7 +82,7 @@ class Settings(BaseSettings):
     prefect_api_url: Optional[str] = None
 
     # Frontend
-    frontend_url: str = "http://localhost:5173"
+    frontend_url: str = "http://localhost:3000"
 
     class Config:
         env_file = ".env"

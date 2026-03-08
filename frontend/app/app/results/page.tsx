@@ -95,23 +95,72 @@ export default function ResultsPage() {
   );
 
   const fiveC = useMemo(() => {
+    // Use backend-computed Five Cs if available (from five_c_analyzer)
+    const backendFiveC = result?.five_cs;
+    if (backendFiveC) {
+      return {
+        character: Number(backendFiveC.character?.score ?? 5),
+        capacity: Number(backendFiveC.capacity?.score ?? 5),
+        capital: Number(backendFiveC.capital?.score ?? 5),
+        collateral: Number(backendFiveC.collateral?.score ?? 5),
+        conditions: Number(backendFiveC.conditions?.score ?? 5),
+      };
+    }
+
+    // Fallback: compute from features with proper individual dimensions
     const f = result?.features || {};
+    const dscr = Number(f.dscr || 1.2);
+    const de = Number(f.debt_equity_ratio || 1.5);
+    const mgmt = Number(f.management_integrity_score || 6);
+    const fraudNews = Number(f.has_promoter_fraud_news || 0);
+    const struckOff = Number(f.has_mca_struck_off_associates || 0);
+    const colCov = Number(f.collateral_coverage_ratio || 1.1);
+    const colType = Number(f.collateral_type_score || 5);
+    const headwinds = Number(f.has_sector_headwinds || 0);
+    const revInflation = Number(f.has_revenue_inflation_signals || 0);
+    const icr = Number(f.interest_coverage_ratio || 2);
+    const capacity_util = Number(f.factory_capacity_utilization || 60);
+    const cr = Number(f.current_ratio || 1.3);
+
     return {
-      character: Math.min(10, Math.max(0, Number(f.management_integrity_score || 6) / 1.2)),
-      capacity: Math.min(10, Math.max(0, Number(f.dscr || 1.2) * 3)),
-      capital: Math.min(10, Math.max(0, 8.5 - Number(f.debt_equity_ratio || 1.5))),
-      collateral: Math.min(10, Math.max(0, Number(f.collateral_coverage_ratio || 1.1) * 4)),
-      conditions: Math.min(10, Math.max(0, 8 - Number(f.has_sector_headwinds || 0) * 2 - Number(f.has_revenue_inflation_signals || 0) * 2)),
+      character: Math.min(10, Math.max(1, 10 - fraudNews * 4 - struckOff * 3 - (mgmt < 5 ? 2 : 0))),
+      capacity: Math.min(10, Math.max(1, dscr * 3 + icr + capacity_util / 20)),
+      capital: Math.min(10, Math.max(1, 9 - de + cr)),
+      collateral: Math.min(10, Math.max(1, colCov * 4 + colType / 2)),
+      conditions: Math.min(10, Math.max(1, 8 - headwinds * 2.5 - revInflation * 2)),
     };
   }, [result]);
 
-  const gstBankData = [
-    {
-      month: 'FY',
-      gst: Number(result?.gst_mismatch?.itc_inflation_percentage || 0) + 100,
+  const gstBankData = useMemo(() => {
+    // Use monthly GST data from XLSX if available
+    const monthlyData = result?.gst_xlsx_data?.monthly_data || [];
+    if (monthlyData.length > 0) {
+      return monthlyData.map((m: any) => ({
+        month: String(m.month || '').replace(/\s+/g, ' ').trim() || 'Unknown',
+        gst: Number(m.outward_supplies || 0),
+        bank: Number(m.bank_credits || m.outward_supplies || 0) * 0.92, // approximate bank credits
+      }));
+    }
+
+    // Fallback: generate 12 month labels with proportional data
+    const fy = result?.gst_xlsx_data?.fiscal_year || 'FY2023-24';
+    const fyMatch = fy.match(/(\d{4})/);
+    const startYear = fyMatch ? Number(fyMatch[1]) : 2023;
+    const monthLabels = [
+      `Apr-${String(startYear).slice(2)}`, `May-${String(startYear).slice(2)}`,
+      `Jun-${String(startYear).slice(2)}`, `Jul-${String(startYear).slice(2)}`,
+      `Aug-${String(startYear).slice(2)}`, `Sep-${String(startYear).slice(2)}`,
+      `Oct-${String(startYear).slice(2)}`, `Nov-${String(startYear).slice(2)}`,
+      `Dec-${String(startYear).slice(2)}`, `Jan-${String(startYear + 1).slice(2)}`,
+      `Feb-${String(startYear + 1).slice(2)}`, `Mar-${String(startYear + 1).slice(2)}`,
+    ];
+    const itcGap = Number(result?.gst_mismatch?.itc_inflation_percentage || 0);
+    return monthLabels.map((label) => ({
+      month: label,
+      gst: 100 + itcGap,
       bank: 100,
-    },
-  ];
+    }));
+  }, [result]);
 
   if (loading) {
     return (
@@ -151,10 +200,24 @@ export default function ResultsPage() {
               <span className="font-mono text-[13px] bg-ic-accent-light text-ic-positive px-2 py-0.5 rounded">{decision.recommendation}</span>
             </div>
             <p className="text-ic-muted text-[13px] mt-2">
-              Recommended: <span className="font-mono text-ic-text">₹{Number(decision.recommended_loan_amount || 0).toFixed(2)} Cr</span>
-              {' · '}Interest: <span className="font-mono text-ic-text">{Number(decision.recommended_interest_rate || 0).toFixed(2)}%</span>
+              {decision.recommendation === 'REJECT' ? (
+                <>
+                  Recommended: <span className="font-mono text-ic-negative">Not Sanctioned (Requested: ₹{Number(decision.recommended_loan_amount || 0).toFixed(2)} Cr)</span>
+                  {' · '}Interest: <span className="font-mono text-ic-muted">N/A</span>
+                </>
+              ) : (
+                <>
+                  Recommended: <span className="font-mono text-ic-text">₹{Number(decision.recommended_loan_amount || 0).toFixed(2)} Cr</span>
+                  {' · '}Interest: <span className="font-mono text-ic-text">{Number(decision.recommended_interest_rate || 0).toFixed(2)}%</span>
+                </>
+              )}
             </p>
             <div className="flex flex-wrap gap-4 mt-2 text-[12px]">
+              <span className="text-ic-muted">
+                Model Confidence: <span className="font-mono font-medium text-ic-text">
+                  {result?.model_confidence || 'N/A'}
+                </span>
+              </span>
               <span className="text-ic-muted">
                 Human input: <span className={`font-mono font-medium ${humanImpactPoints >= 0 ? 'text-ic-positive' : 'text-ic-negative'}`}>
                   {humanImpactPoints >= 0 ? '+' : ''}{humanImpactPoints.toFixed(1)} pts
@@ -260,20 +323,29 @@ export default function ResultsPage() {
           </div>
         </div>
 
-        {/* Full width: Fraud Graph */}
+        {/* Full width: Fraud Graph — dynamic from analysis data */}
         <div className="mt-5">
-          <FraudGraph
-            nodes={[
-              { id: 'Vardhman', type: 'company' },
-              { id: 'Entity B', type: 'counterparty' },
-              { id: 'Entity C', type: 'counterparty' },
-            ]}
-            links={[
-              { source: 'Vardhman', target: 'Entity B', value: 40 },
-              { source: 'Entity B', target: 'Entity C', value: 38 },
-              { source: 'Entity C', target: 'Vardhman', value: 39 },
-            ]}
-          />
+          {result?.fraud_graph?.nodes?.length > 0 ? (
+            <FraudGraph
+              nodes={result.fraud_graph.nodes}
+              links={result.fraud_graph.links || []}
+            />
+          ) : (
+            <div className="bg-ic-surface border border-ic-border rounded-[10px] p-5">
+              <p className="text-[10px] font-medium tracking-[0.12em] uppercase text-ic-muted mb-2.5">Fraud Fingerprinting Graph</p>
+              <p className="text-ic-muted text-[13px]">No confirmed fraud network connections detected (requires 2+ corroborating signals).</p>
+              {result?.fraud_graph?.weak_associations?.length > 0 && (
+                <details className="mt-3">
+                  <summary className="text-[11px] text-ic-muted cursor-pointer">Show weak associations (unverified)</summary>
+                  <div className="mt-2 space-y-1">
+                    {result.fraud_graph.weak_associations.map((a: any, idx: number) => (
+                      <p key={idx} className="text-[11px] text-ic-muted font-mono">{a.entity} — {a.signal} (LOW confidence)</p>
+                    ))}
+                  </div>
+                </details>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

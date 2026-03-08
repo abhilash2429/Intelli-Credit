@@ -17,10 +17,17 @@ from backend.core.ingestion.cross_validator import CrossValidator
 from backend.core.ingestion.gst_parser import GSTMismatchAnalyzer, GSTParser
 from backend.core.ingestion.itr_parser import ITRParser
 from backend.core.ingestion.pdf_parser import IntelliCreditPDFParser
+from backend.core.ingestion.xlsx_financial_parser import (
+    detect_xlsx_type,
+    parse_financial_statement_xlsx,
+    parse_gst_xlsx,
+    parse_shareholding_xlsx,
+)
 from backend.core.ml.credit_scorer import CreditScoringModel
 from backend.core.ml.explainer import CreditExplainer
 from backend.core.ml.feature_engineering import build_feature_vector
 from backend.core.report.cam_generator import CAMGenerator
+from backend.core.report.five_c_analyzer import analyze_five_cs
 from backend.core.research.cibil_mock import get_mock_cibil_score
 from backend.core.research.research_to_delta import ResearchToDelta
 from backend.core.research.web_agent import WebResearchAgent
@@ -171,6 +178,9 @@ class IntelliCreditPipeline:
             itr_data=itr_payload,
             gst_mismatch=gst_payload.get("mismatch_report"),
             annual_debt_obligation=float(parsed_financials.get("annual_debt_obligation", 1.0)),
+            gst_xlsx_data=parsed_financials.get("gst_xlsx_data"),
+            shareholding_data=parsed_financials.get("shareholding_data"),
+            xlsx_financials=parsed_financials.get("financials"),
         )
         self._persist_ingestion_to_delta(
             company_id=company_id,
@@ -225,18 +235,34 @@ class IntelliCreditPipeline:
             message="Building features, applying hard rules, and scoring risk",
         )
 
+        # Merge GST XLSX data into GST mismatch payload
+        gst_xlsx_data = parsed_financials.get("gst_xlsx_data", {})
+        gst_feature_data = {}
+        if gst_payload.get("mismatch_report"):
+            gst_feature_data = gst_payload["mismatch_report"].model_dump()
+        # Override with XLSX-parsed ITC gap if available and non-zero
+        if gst_xlsx_data.get("itc_mismatch_pct", 0.0) > 0:
+            gst_feature_data["itc_inflation_percentage"] = gst_xlsx_data["itc_mismatch_pct"]
+            if gst_xlsx_data.get("has_circular_trading_signals"):
+                gst_feature_data["suspected_circular_trading"] = True
+            if gst_xlsx_data.get("has_gst_itc_mismatch"):
+                gst_feature_data["revenue_inflation_flag"] = True
+
+        # Merge shareholding data
+        shareholding_data = parsed_financials.get("shareholding_data", {})
+
         features = build_feature_vector(
             {
                 "financials": parsed_financials.get("financials", {}),
                 "bank_metrics": bank_metrics.model_dump() if bank_metrics else {},
-                "gst": gst_payload.get("mismatch_report", {}).model_dump()
-                if gst_payload.get("mismatch_report")
-                else {},
+                "gst": gst_feature_data,
                 "cross_validation": cross_report.model_dump(),
                 "research": research_summary,
                 "due_diligence": due_payload,
                 "collateral": parsed_financials.get("collateral", {}),
                 "sector": company.sector or "other",
+                "shareholding": shareholding_data,
+                "gst_xlsx": gst_xlsx_data,
             }
         )
 
@@ -304,6 +330,24 @@ class IntelliCreditPipeline:
         db.add(cam_record)
         await db.commit()
 
+        # Five Cs analysis
+        five_cs = analyze_five_cs(features)
+
+        # Model confidence: agreement between rule and ML subsystems
+        rule_score_norm = max(0.0, min(1.0, (decision.credit_score - 300) / 600))
+        ml_stress_prob = max(0.0, min(1.0, (900 - decision.credit_score) / 600))
+        ml_score_norm = 1 - ml_stress_prob
+        agreement = 1 - abs(rule_score_norm - ml_score_norm)
+        model_confidence_pct = round(agreement * 100, 1)
+
+        # Build fraud fingerprinting graph with multi-signal corroboration
+        fraud_graph = self.cross_validator.build_fraud_graph(
+            company_name=company.name,
+            bank_metrics=bank_metrics,
+            research_findings=research_bundle.findings,
+            gst_mismatch=gst_payload.get("mismatch_report"),
+        )
+
         result_payload = {
             "company_id": company_id,
             "decision": decision.model_dump(),
@@ -313,6 +357,12 @@ class IntelliCreditPipeline:
             "gst_mismatch": gst_payload.get("mismatch_report").model_dump()
             if gst_payload.get("mismatch_report")
             else None,
+            "gst_xlsx_data": gst_xlsx_data,
+            "shareholding_data": shareholding_data,
+            "fraud_graph": fraud_graph,
+            "five_cs": five_cs,
+            "model_confidence": f"{model_confidence_pct}% agreement between rule and ML subsystems",
+            "model_confidence_pct": model_confidence_pct,
             "research_findings": [f.model_dump() for f in research_bundle.findings],
             "research_cam_narrative": research_narrative,
             "due_diligence": due_payload,
@@ -408,6 +458,9 @@ class IntelliCreditPipeline:
         itr_data = None
         gst_turnover = 0.0
         annual_debt_obligation = 8.0
+        xlsx_financials: Dict[str, Any] = {}
+        gst_xlsx_data: Dict[str, Any] = {}
+        shareholding_data: Dict[str, Any] = {}
 
         for doc in documents:
             path = doc.file_path
@@ -432,14 +485,34 @@ class IntelliCreditPipeline:
                 elif "itr" in low:
                     itr_data = await asyncio.to_thread(self.itr_parser.parse, path)
             elif low.endswith(".csv") or low.endswith(".xlsx") or low.endswith(".xls"):
-                bank_metrics = await asyncio.to_thread(
-                    self.bank_analyzer.analyze,
-                    path,
-                    annual_revenue=20.0,
-                    gst_turnover=20.0,
-                )
+                xlsx_type = detect_xlsx_type(path)
+                if xlsx_type == "financial_statement":
+                    xlsx_financials = await asyncio.to_thread(parse_financial_statement_xlsx, path)
+                    logger.info("pipeline.xlsx_financial_parsed", dscr=xlsx_financials.get("dscr"))
+                elif xlsx_type == "gst_returns":
+                    gst_xlsx_data = await asyncio.to_thread(parse_gst_xlsx, path)
+                    logger.info("pipeline.xlsx_gst_parsed", itc_gap=gst_xlsx_data.get("itc_mismatch_pct"))
+                elif xlsx_type == "shareholding":
+                    shareholding_data = await asyncio.to_thread(parse_shareholding_xlsx, path)
+                    logger.info("pipeline.xlsx_shareholding_parsed", pledge=shareholding_data.get("promoter_pledge_pct"))
+                else:
+                    bank_metrics = await asyncio.to_thread(
+                        self.bank_analyzer.analyze,
+                        path,
+                        annual_revenue=20.0,
+                        gst_turnover=20.0,
+                    )
 
         base_financial = financial_docs[0].model_dump() if financial_docs else {}
+
+        # Merge XLSX-extracted financials into base (XLSX takes precedence for numeric fields)
+        if xlsx_financials:
+            for key, val in xlsx_financials.items():
+                if val is not None and val != 0.0:
+                    base_financial[key] = val
+                elif key not in base_financial:
+                    base_financial[key] = val
+
         if gstr3b:
             gst_turnover = float(gstr3b.outward_supplies)
         if bank_metrics:
@@ -459,6 +532,8 @@ class IntelliCreditPipeline:
             "gst_turnover": gst_turnover,
             "annual_debt_obligation": annual_debt_obligation,
             "collateral": collateral,
+            "gst_xlsx_data": gst_xlsx_data,
+            "shareholding_data": shareholding_data,
         }
 
     def _build_gst_payload(self, parsed: Dict[str, Any]) -> Dict[str, Any]:

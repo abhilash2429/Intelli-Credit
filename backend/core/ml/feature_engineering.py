@@ -4,10 +4,13 @@ Feature engineering for Intelli-Credit hybrid scoring.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import Any, Dict
 
 from backend.core.india_context import sector_risk_multiplier
+
+logger = logging.getLogger(__name__)
 
 
 CREDIT_FEATURES = {
@@ -62,6 +65,7 @@ def build_feature_vector(payload: Dict[str, Any]) -> Dict[str, float]:
     research = payload.get("research", {})
     due = payload.get("due_diligence", {})
     collateral = payload.get("collateral", {})
+    gst_xlsx = payload.get("gst_xlsx", {})
 
     revenue_series = financials.get("revenue_figures", [])
     rev_values = [
@@ -77,13 +81,32 @@ def build_feature_vector(payload: Dict[str, Any]) -> Dict[str, float]:
     sector = str(payload.get("sector", "other")).lower()
     sector_multiplier = sector_risk_multiplier(sector)
 
+    # DSCR: prefer XLSX-extracted value, then cross-validation, then fallback
+    dscr_value = _safe_num(financials.get("dscr"), 0.0)
+    cross_dscr = _safe_num(payload.get("cross_validation", {}).get("debt_service_coverage_ratio"), 0.0)
+    if dscr_value > 0:
+        dscr = dscr_value
+    elif cross_dscr > 0:
+        dscr = cross_dscr
+    else:
+        dscr = 1.3  # default fallback
+        logger.warning("[Features] DSCR is 0.0 from all sources, using default 1.3")
+
+    # GST ITC gap: prefer XLSX-parsed value, then mismatch report
+    gst_itc_gap = _safe_num(gst_xlsx.get("itc_mismatch_pct"), 0.0)
+    if gst_itc_gap == 0.0:
+        gst_itc_gap = _safe_num(gst.get("itc_inflation_percentage"), 0.0)
+
+    # Circular trading: check both sources
+    has_circular = bool(gst.get("suspected_circular_trading", False)) or bool(gst_xlsx.get("has_circular_trading_signals", False))
+
     vector = {
         "revenue_cagr_3yr": revenue_cagr_3yr,
         "ebitda_margin": _safe_num(financials.get("ebitda_margin"), 10.0),
         "debt_equity_ratio": _safe_num(financials.get("debt_equity_ratio"), 1.5),
         "current_ratio": _safe_num(financials.get("current_ratio"), 1.4),
         "interest_coverage_ratio": _safe_num(financials.get("interest_coverage_ratio"), 2.0),
-        "dscr": _safe_num(payload.get("cross_validation", {}).get("debt_service_coverage_ratio"), 1.3),
+        "dscr": dscr,
         "gst_banking_ratio": _safe_num(bank.get("banking_to_gst_ratio"), 1.0),
         "itr_gst_consistency_score": _safe_num(
             100 - payload.get("cross_validation", {}).get("itr_vs_gst_revenue_gap", 0.0), 80.0
@@ -93,12 +116,12 @@ def build_feature_vector(payload: Dict[str, Any]) -> Dict[str, float]:
         "has_going_concern_doubt": float(bool(financials.get("going_concern_doubts"))),
         "has_litigation": float(bool(research.get("litigation_count", 0) > 0)),
         "has_mca_struck_off_associates": float(bool(research.get("mca_struck_off_count", 0) > 0)),
-        "has_circular_trading_signals": float(bool(gst.get("suspected_circular_trading", False))),
+        "has_circular_trading_signals": float(has_circular),
         "has_revenue_inflation_signals": float(bool(gst.get("revenue_inflation_flag", False))),
         "has_promoter_fraud_news": float(bool(research.get("promoter_fraud_hits", 0) > 0)),
         "has_sector_headwinds": float(bool(research.get("sector_headwinds", False))),
         "has_nclt_proceedings": float(bool(research.get("has_nclt", False))),
-        "gstr3b_vs_2a_itc_gap": _safe_num(gst.get("itc_inflation_percentage"), 0.0),
+        "gstr3b_vs_2a_itc_gap": gst_itc_gap,
         "gst_return_filing_consistency": _safe_num(gst.get("filing_consistency_pct"), 85.0),
         "mca_filing_compliance_score": _safe_num(research.get("mca_filing_compliance_score"), 80.0),
         "cibil_commercial_score": _safe_num(research.get("cibil_commercial_score"), 700.0),

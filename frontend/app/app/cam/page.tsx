@@ -98,7 +98,7 @@ export default function CamPage() {
         {/* Chat CTA */}
         <div className="mt-5 text-center no-print">
           <button
-            onClick={() => router.push('/chat')}
+            onClick={() => router.push('/app/chat')}
             className="px-5 py-2.5 bg-ic-accent text-white font-medium rounded-[10px] text-[13px] transition-opacity hover:opacity-90"
           >
             Chat with CAM Report →

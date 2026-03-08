@@ -39,7 +39,7 @@ async def ingest_documents(
         Dict with company_id and list of saved file paths.
     """
     # Create company record
-    company_id = str(uuid.uuid4())
+    company_id = uuid.uuid4()
     company = Company(
         id=company_id,
         name=company_name,
@@ -60,7 +60,7 @@ async def ingest_documents(
 
         # Create document record
         doc = Document(
-            id=str(uuid.uuid4()),
+            id=uuid.uuid4(),
             company_id=company_id,
             file_path=file_path,
         )
@@ -72,7 +72,7 @@ async def ingest_documents(
     logger.info(f"[Ingest] Saved {len(files)} files for {company_name} ({company_id})")
 
     return {
-        "company_id": company_id,
+        "company_id": str(company_id),
         "company_name": company_name,
         "file_paths": file_paths,
         "file_count": len(file_paths),

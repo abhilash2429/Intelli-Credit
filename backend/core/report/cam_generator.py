@@ -114,12 +114,21 @@ class CAMGenerator:
             f"Tenor: {company.get('loan_tenor_months', 36)} months | Purpose: {company.get('loan_purpose', 'N/A')}"
         )
         box = doc.add_paragraph()
-        box.add_run(
-            "Recommendation: "
-            f"{decision.get('recommendation')} | "
-            f"Amount: ₹{decision.get('recommended_loan_amount', 0):,.2f} crore | "
-            f"Rate: {decision.get('recommended_interest_rate', 0):.2f}% p.a."
-        ).bold = True
+        recommendation = decision.get('recommendation', 'PENDING')
+        if recommendation == "REJECT":
+            box.add_run(
+                f"Recommendation: REJECT | "
+                f"Limit: Not Sanctioned (Requested: ₹{decision.get('recommended_loan_amount', 0):,.2f} crore) | "
+                f"Rate: N/A"
+            ).bold = True
+            if decision.get("rule_hits"):
+                doc.add_paragraph(f"Rejection reasons: {', '.join(decision['rule_hits'])}")
+        else:
+            box.add_run(
+                f"Recommendation: {recommendation} | "
+                f"Amount: ₹{decision.get('recommended_loan_amount', 0):,.2f} crore | "
+                f"Rate: {decision.get('recommended_interest_rate', 0):.2f}% p.a."
+            ).bold = True
 
     @staticmethod
     def _section_borrower_profile(

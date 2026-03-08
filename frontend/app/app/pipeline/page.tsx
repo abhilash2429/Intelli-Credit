@@ -16,13 +16,20 @@ const FLOW_STEPS = [
 export default function PipelinePage() {
   const [hitlReached, setHitlReached] = useState(false);
   const [complete, setComplete] = useState(false);
-  const { companyId, companyName, setPipelineStatus } = useAnalysisStore();
+  const [pipelineStarted, setPipelineStarted] = useState(false);
+  const { companyId, companyName, setPipelineStatus, advanceStep } = useAnalysisStore();
   const router = useRouter();
 
   return (
     <div className="bg-ic-page py-12 px-4 md:px-6">
       <div className="max-w-[720px] mx-auto space-y-5">
-        {/* Page heading */}
+        {/* Back button (only before pipeline starts) */}
+        {!pipelineStarted && !complete && (
+          <button onClick={() => router.push('/app/notes')} className="text-[13px] text-ic-muted hover:text-ic-text transition-colors">
+            ← Back to Notes
+          </button>
+        )}
+
         <div>
           <h1 className="font-display text-[28px] font-normal text-ic-text">Processing Assessment</h1>
           <p className="text-[12px] font-mono text-ic-muted mt-1">
@@ -30,7 +37,6 @@ export default function PipelinePage() {
           </p>
         </div>
 
-        {/* Pipeline steps timeline */}
         <div className="bg-ic-surface border border-ic-border rounded-[10px] p-5">
           <p className="text-[10px] font-medium tracking-[0.12em] uppercase text-ic-muted mb-4">Pipeline Stages</p>
           <div className="space-y-0">
@@ -38,13 +44,11 @@ export default function PipelinePage() {
               const isLast = idx === FLOW_STEPS.length - 1;
               return (
                 <div key={step.title} className="flex gap-3">
-                  {/* Dot + connector line */}
                   <div className="flex flex-col items-center">
                     <div className="w-3 h-3 rounded-full border-2 border-ic-border bg-ic-surface flex-shrink-0 mt-0.5" />
                     {!isLast && <div className="w-px flex-1 bg-ic-border" />}
                   </div>
-                  {/* Content */}
-                  <div className={`pb-4 ${isLast ? '' : ''}`}>
+                  <div className="pb-4">
                     <p className="text-[13px] font-medium text-ic-text">{step.title}</p>
                     <p className="text-[11px] text-ic-muted mt-0.5">{step.subtitle}</p>
                   </div>
@@ -54,7 +58,6 @@ export default function PipelinePage() {
           </div>
         </div>
 
-        {/* Agent progress log */}
         <div className="bg-ic-surface border border-ic-border rounded-[10px] p-5">
           <p className="text-[10px] font-medium tracking-[0.12em] uppercase text-ic-muted mb-2.5">Live Progress</p>
           {companyId ? (
@@ -62,11 +65,15 @@ export default function PipelinePage() {
               companyId={companyId}
               onHitlReached={() => {
                 setHitlReached(true);
+                setPipelineStarted(true);
                 setPipelineStatus('hitl');
               }}
               onComplete={() => {
                 setComplete(true);
+                setPipelineStarted(true);
                 setPipelineStatus('complete');
+                advanceStep(); // step 2 → 3
+                router.push('/app/score');
               }}
             />
           ) : (
@@ -76,37 +83,14 @@ export default function PipelinePage() {
           )}
         </div>
 
-        {/* Action buttons */}
         <div className="flex flex-wrap gap-3">
           {hitlReached && !complete && (
             <button
-              onClick={() => router.push('/notes')}
+              onClick={() => router.push('/app/notes')}
               className="py-2.5 px-5 bg-ic-tan text-ic-text font-medium rounded-[10px] text-[13px] transition-opacity hover:opacity-90"
             >
               Add credit officer notes
             </button>
-          )}
-          {complete && (
-            <>
-              <button
-                onClick={() => router.push('/results')}
-                className="py-2.5 px-5 bg-ic-accent text-white font-medium rounded-[10px] text-[13px] transition-opacity hover:opacity-90"
-              >
-                View results
-              </button>
-              <button
-                onClick={() => router.push('/explain')}
-                className="py-2.5 px-5 bg-ic-surface border border-ic-border text-ic-text font-medium rounded-[10px] text-[13px] transition-opacity hover:opacity-90"
-              >
-                Why this decision
-              </button>
-              <button
-                onClick={() => router.push('/cam')}
-                className="py-2.5 px-5 bg-ic-surface border border-ic-border text-ic-text font-medium rounded-[10px] text-[13px] transition-opacity hover:opacity-90"
-              >
-                Open CAM report
-              </button>
-            </>
           )}
         </div>
       </div>

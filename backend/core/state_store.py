@@ -5,6 +5,7 @@ Helpers to persist analysis run state and audit trail.
 from __future__ import annotations
 
 import json
+import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -40,8 +41,9 @@ async def create_run(
     status: str = "queued",
     step: str = "DOCUMENTS_RECEIVED",
 ) -> AnalysisRun:
+    company_uuid = uuid.UUID(company_id) if isinstance(company_id, str) else company_id
     run = AnalysisRun(
-        company_id=company_id,
+        company_id=company_uuid,
         status=status,
         current_step=step,
         progress_pct=0.0,
@@ -54,9 +56,10 @@ async def create_run(
 
 
 async def get_latest_run(db: AsyncSession, company_id: str) -> Optional[AnalysisRun]:
+    company_uuid = uuid.UUID(company_id) if isinstance(company_id, str) else company_id
     query = (
         select(AnalysisRun)
-        .where(AnalysisRun.company_id == company_id)
+        .where(AnalysisRun.company_id == company_uuid)
         .order_by(AnalysisRun.created_at.desc())
         .limit(1)
     )

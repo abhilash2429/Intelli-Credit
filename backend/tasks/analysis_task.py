@@ -20,5 +20,11 @@ def run_analysis_task(company_id: str) -> dict:
             result = await pipeline.run_analysis(db, company_id)
             return result
 
-    return asyncio.run(_run())
+    # Explicit new event loop avoids RuntimeError when a loop is already running
+    loop = asyncio.new_event_loop()
+    try:
+        return loop.run_until_complete(_run())
+    finally:
+        loop.close()
+
 

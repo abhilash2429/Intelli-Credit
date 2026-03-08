@@ -16,7 +16,7 @@ function useDebounce<T>(value: T, delay = 600): T {
 
 export default function DueDiligencePage() {
   const router = useRouter();
-  const { companyId, companyName } = useAnalysisStore();
+  const { companyId, companyName, advanceStep } = useAnalysisStore();
 
   const [factoryVisitDate, setFactoryVisitDate] = useState('');
   const [capacity, setCapacity] = useState(68);
@@ -62,7 +62,8 @@ export default function DueDiligencePage() {
         management_interview_rating: interviewRating,
         key_management_persons: [],
       });
-      router.push('/pipeline');
+      advanceStep(); // step 1 → 2
+      router.push('/app/pipeline');
     } catch (err: any) {
       setError(err?.response?.data?.detail || err.message || 'Submission failed');
     } finally {
@@ -78,7 +79,6 @@ export default function DueDiligencePage() {
       <div className="max-w-[1100px] mx-auto flex flex-col lg:flex-row gap-5">
         {/* Left column — 65% */}
         <div className="flex-[65] space-y-5">
-          {/* Header */}
           <div>
             <div className="flex items-center gap-3">
               <h1 className="font-display text-[26px] font-normal text-ic-text">Due Diligence Portal</h1>
@@ -89,22 +89,14 @@ export default function DueDiligencePage() {
             </p>
           </div>
 
-          {/* Business Overview card */}
           <div className="bg-ic-surface border border-ic-border rounded-[10px] p-5">
             <h2 className="font-display text-[18px] text-ic-text mb-4">Business Overview</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <label className={labelClass}>
-                Factory Visit Date
-                <input type="date" value={factoryVisitDate} onChange={(e) => setFactoryVisitDate(e.target.value)} className={inputClass} />
-              </label>
-              <label className={labelClass}>
-                Management Interview Rating ({interviewRating}/5)
-                <input type="range" min={1} max={5} value={interviewRating} onChange={(e) => setInterviewRating(Number(e.target.value))} className="mt-2 w-full" />
-              </label>
+              <label className={labelClass}>Factory Visit Date<input type="date" value={factoryVisitDate} onChange={(e) => setFactoryVisitDate(e.target.value)} className={inputClass} /></label>
+              <label className={labelClass}>Management Interview Rating ({interviewRating}/5)<input type="range" min={1} max={5} value={interviewRating} onChange={(e) => setInterviewRating(Number(e.target.value))} className="mt-2 w-full" /></label>
             </div>
           </div>
 
-          {/* Management & Governance card */}
           <div className="bg-ic-surface border border-ic-border rounded-[10px] p-5">
             <h2 className="font-display text-[18px] text-ic-text mb-4">Management & Governance</h2>
             <div className="mb-4">
@@ -112,64 +104,31 @@ export default function DueDiligencePage() {
               <input type="range" min={0} max={100} value={capacity} onChange={(e) => setCapacity(Number(e.target.value))} className="w-full" />
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <label className={labelClass}>
-                Factory Condition
-                <select value={factoryCondition} onChange={(e) => setFactoryCondition(e.target.value)} className={inputClass}>
-                  {['EXCELLENT', 'GOOD', 'FAIR', 'POOR'].map((x) => (
-                    <option key={x} value={x}>{x}</option>
-                  ))}
-                </select>
-              </label>
-              <label className={labelClass}>
-                Inventory Levels
-                <select value={inventoryLevels} onChange={(e) => setInventoryLevels(e.target.value)} className={inputClass}>
-                  {['ADEQUATE', 'LOW', 'EXCESS', 'SUSPICIOUS'].map((x) => (
-                    <option key={x} value={x}>{x}</option>
-                  ))}
-                </select>
-              </label>
-              <label className={labelClass}>
-                Management Cooperation
-                <select value={managementCooperation} onChange={(e) => setManagementCooperation(e.target.value)} className={inputClass}>
-                  {['COOPERATIVE', 'EVASIVE', 'REFUSED'].map((x) => (
-                    <option key={x} value={x}>{x}</option>
-                  ))}
-                </select>
-              </label>
+              <label className={labelClass}>Factory Condition<select value={factoryCondition} onChange={(e) => setFactoryCondition(e.target.value)} className={inputClass}>{['EXCELLENT', 'GOOD', 'FAIR', 'POOR'].map((x) => (<option key={x} value={x}>{x}</option>))}</select></label>
+              <label className={labelClass}>Inventory Levels<select value={inventoryLevels} onChange={(e) => setInventoryLevels(e.target.value)} className={inputClass}>{['ADEQUATE', 'LOW', 'EXCESS', 'SUSPICIOUS'].map((x) => (<option key={x} value={x}>{x}</option>))}</select></label>
+              <label className={labelClass}>Management Cooperation<select value={managementCooperation} onChange={(e) => setManagementCooperation(e.target.value)} className={inputClass}>{['COOPERATIVE', 'EVASIVE', 'REFUSED'].map((x) => (<option key={x} value={x}>{x}</option>))}</select></label>
             </div>
           </div>
 
-          {/* Analyst Notes card */}
           <div className="bg-ic-surface border border-ic-border rounded-[10px] p-5">
             <h2 className="font-display text-[18px] text-ic-text mb-4">Analyst Notes</h2>
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              rows={8}
-              placeholder="Mention production, order-book, utilization, inventory quality, management behavior..."
-              className={`${inputClass} min-h-[100px]`}
-            />
+            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={8} placeholder="Mention production, order-book, utilization, inventory quality, management behavior..." className={`${inputClass} min-h-[100px]`} />
             <p className="text-[11px] text-ic-muted mt-1 font-mono">{charCount} characters</p>
           </div>
 
-          {error && (
-            <div className="bg-[#fdf0e8] border border-[#f3d5bc] rounded-[10px] p-3">
-              <p className="text-ic-warning text-[13px]">{error}</p>
-            </div>
-          )}
+          {error && (<div className="bg-[#fdf0e8] border border-[#f3d5bc] rounded-[10px] p-3"><p className="text-ic-warning text-[13px]">{error}</p></div>)}
 
-          <button
-            onClick={handleSubmit}
-            disabled={loading || !notes.trim()}
-            className="w-full py-3 rounded-[10px] bg-ic-accent text-white font-medium transition-opacity hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            {loading ? 'Submitting...' : 'Submit Due Diligence'}
-          </button>
+          {/* Footer row: Back + Submit */}
+          <div className="flex items-center justify-between">
+            <button onClick={() => router.push('/app/upload')} className="text-[13px] text-ic-muted hover:text-ic-text transition-colors">← Back to Upload</button>
+            <button onClick={handleSubmit} disabled={loading || !notes.trim()} className="py-3 px-8 rounded-[10px] bg-ic-accent text-white font-medium transition-opacity hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed">
+              {loading ? 'Submitting...' : 'Run Analysis →'}
+            </button>
+          </div>
         </div>
 
         {/* Right column — 35%, sticky */}
         <div className="flex-[35] space-y-5 lg:sticky lg:top-[72px] lg:self-start">
-          {/* Completion checklist */}
           <div className="bg-ic-surface border border-ic-border rounded-[10px] p-5">
             <p className="text-[10px] font-medium tracking-[0.12em] uppercase text-ic-muted mb-2.5">Completion</p>
             <div className="space-y-2">
@@ -182,40 +141,20 @@ export default function DueDiligencePage() {
             </div>
           </div>
 
-          {/* Live AI Analysis */}
           <div className="bg-ic-surface border border-ic-border rounded-[10px] p-5">
             <p className="text-[10px] font-medium tracking-[0.12em] uppercase text-ic-muted mb-2.5">Live AI Analysis</p>
             {!preview ? (
               <p className="text-ic-muted text-[13px]">Start typing notes to see extracted risk flags in real-time.</p>
             ) : (
               <div className="space-y-3 text-[13px]">
-                <p className="text-ic-text">
-                  Sentiment: <span className="font-medium">{preview.sentiment}</span>
-                </p>
-                <div>
-                  <p className="font-medium text-ic-negative text-[12px]">Risk Factors</p>
-                  <ul className="mt-1 space-y-1">
-                    {(preview.risk_factors || []).map((x: string, i: number) => (
-                      <li key={i} className="text-ic-warning text-[12px]">• {x}</li>
-                    ))}
-                  </ul>
-                </div>
-                <div>
-                  <p className="font-medium text-ic-positive text-[12px]">Positive Factors</p>
-                  <ul className="mt-1 space-y-1">
-                    {(preview.positive_factors || []).map((x: string, i: number) => (
-                      <li key={i} className="text-ic-positive text-[12px]">• {x}</li>
-                    ))}
-                  </ul>
-                </div>
-                <p className="text-ic-text">
-                  Suggested Adjustment: <span className="font-mono font-medium">{Number(preview.score_adjustment).toFixed(1)}</span>
-                </p>
+                <p className="text-ic-text">Sentiment: <span className="font-medium">{preview.sentiment}</span></p>
+                <div><p className="font-medium text-ic-negative text-[12px]">Risk Factors</p><ul className="mt-1 space-y-1">{(preview.risk_factors || []).map((x: string, i: number) => (<li key={i} className="text-ic-warning text-[12px]">• {x}</li>))}</ul></div>
+                <div><p className="font-medium text-ic-positive text-[12px]">Positive Factors</p><ul className="mt-1 space-y-1">{(preview.positive_factors || []).map((x: string, i: number) => (<li key={i} className="text-ic-positive text-[12px]">• {x}</li>))}</ul></div>
+                <p className="text-ic-text">Suggested Adjustment: <span className="font-mono font-medium">{Number(preview.score_adjustment).toFixed(1)}</span></p>
               </div>
             )}
           </div>
 
-          {/* Tips */}
           <div className="bg-ic-surface border border-ic-border rounded-[10px] p-5">
             <p className="text-[10px] font-medium tracking-[0.12em] uppercase text-ic-muted mb-2.5">Tips</p>
             <ul className="space-y-1.5 text-[12px] text-ic-muted">

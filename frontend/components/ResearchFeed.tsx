@@ -17,6 +17,11 @@ const FILTERS = ['ALL', 'CRITICAL', 'FRAUD', 'LITIGATION', 'SECTOR'] as const;
 export default function ResearchFeed({ findings }: { findings: Finding[] }) {
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>('ALL');
 
+  const hasMockData = useMemo(
+    () => findings.some((f) => f.source_name.includes('Mock')),
+    [findings]
+  );
+
   const filtered = useMemo(() => {
     if (filter === 'ALL') return findings;
     if (filter === 'CRITICAL') return findings.filter((f) => f.severity === 'CRITICAL');
@@ -52,6 +57,12 @@ export default function ResearchFeed({ findings }: { findings: Finding[] }) {
           ))}
         </div>
       </div>
+
+      {hasMockData && (
+        <div className="mb-3 px-3 py-2 rounded bg-[#fdf0e8] border border-[#f3d5bc] text-[11px] text-ic-warning font-medium">
+          Research agent running on cached/mock data — live search unavailable
+        </div>
+      )}
 
       <div className="space-y-0 max-h-[420px] overflow-auto">
         {filtered.map((f, idx) => (

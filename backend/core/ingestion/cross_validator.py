@@ -4,7 +4,7 @@ Cross-source financial consistency validator.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from backend.schemas.credit import (
     Anomaly,
@@ -33,6 +33,9 @@ class CrossValidator:
         receivable_days: int = 45,
         inventory_days: int = 35,
         payable_days: int = 30,
+        gst_xlsx_data: Optional[Dict[str, Any]] = None,
+        shareholding_data: Optional[Dict[str, Any]] = None,
+        xlsx_financials: Optional[Dict[str, Any]] = None,
     ) -> CrossValidationReport:
         anomalies: List[Anomaly] = []
         fraud_indicators: List[FraudIndicator] = []
@@ -107,6 +110,70 @@ class CrossValidator:
                 )
             )
 
+        # GST ITC mismatch from XLSX-parsed data
+        if gst_xlsx_data:
+            itc_gap = float(gst_xlsx_data.get("itc_mismatch_pct", 0.0))
+            if itc_gap > 5:
+                sev = Severity.CRITICAL if itc_gap > 20 else Severity.HIGH
+                anomalies.append(
+                    Anomaly(
+                        title="GST ITC Mismatch",
+                        details=f"ITC claimed exceeds available by {itc_gap:.1f}%. "
+                                f"Excess: ₹{gst_xlsx_data.get('itc_mismatch_abs', 0):.0f} Cr over "
+                                f"₹{gst_xlsx_data.get('itc_2a_available', 0):.0f} Cr available in GSTR-2A.",
+                        severity=sev,
+                    )
+                )
+                if itc_gap > 20:
+                    recommendation_flags.append("Investigate circular trading and fake invoicing risk.")
+
+        # Round-trip bank transfer detection (wider tolerance: 5% within 3 days)
+        if bank_metrics and bank_metrics.circular_credit_debit_pairs:
+            pairs = bank_metrics.circular_credit_debit_pairs
+            if len(pairs) > 0:
+                total_amount = sum(t.amount for t in pairs)
+                anomalies.append(
+                    Anomaly(
+                        title="Round-trip Bank Transfers Detected",
+                        details=f"{len(pairs)} circular credit-debit pair(s) found. "
+                                f"Total amount: ₹{total_amount:,.0f} Cr. "
+                                "Same counterparty, matching amounts within 5%, within 3 calendar days.",
+                        severity=Severity.HIGH,
+                    )
+                )
+
+        # Promoter pledge anomaly
+        if shareholding_data:
+            pledge_pct = float(shareholding_data.get("promoter_pledge_pct", 0.0))
+            if pledge_pct > 75:
+                sev = Severity.CRITICAL if pledge_pct > 90 else Severity.HIGH
+                anomalies.append(
+                    Anomaly(
+                        title="Promoter Pledge Critical",
+                        details=f"Promoter has pledged {pledge_pct:.1f}% of holdings. "
+                                f"{'CRITICAL: >90% pledge indicates extreme financial stress.' if pledge_pct > 90 else 'HIGH: >75% pledge indicates significant stress.'}",
+                        severity=sev,
+                    )
+                )
+                recommendation_flags.append("Obtain pledge reduction plan from promoter before sanction.")
+
+        # Contingent liability ratio check
+        if xlsx_financials:
+            contingent = float(xlsx_financials.get("total_contingent_liabilities", 0.0))
+            equity = float(xlsx_financials.get("net_worth_crore", 0.0))
+            if equity > 0 and contingent > 0:
+                ratio = contingent / equity
+                if ratio > 5.0:
+                    sev = Severity.CRITICAL if ratio > 10 else Severity.HIGH
+                    anomalies.append(
+                        Anomaly(
+                            title="Contingent Liability Concentration",
+                            details=f"Contingent liabilities (₹{contingent:,.0f} Cr) are {ratio:.1f}x net worth (₹{equity:,.0f} Cr). "
+                                    f"{'CRITICAL risk of capital erosion.' if ratio > 10 else 'HIGH concentration risk.'}",
+                            severity=sev,
+                        )
+                    )
+
         effective_cash_flow = (
             net_cash_flow
             if net_cash_flow is not None
@@ -146,6 +213,96 @@ class CrossValidator:
             fraud_indicators=fraud_indicators,
             recommendation_flags=recommendation_flags,
         )
+
+    @staticmethod
+    def build_fraud_graph(
+        *,
+        company_name: str,
+        bank_metrics: Optional[BankStatementMetrics] = None,
+        research_findings: Optional[list] = None,
+        gst_mismatch: Optional[MismatchReport] = None,
+    ) -> Dict[str, Any]:
+        """
+        Build fraud fingerprinting graph with multi-signal corroboration.
+        An edge requires AT LEAST TWO corroborating signals.
+        """
+        nodes = [{"id": company_name, "type": "company"}]
+        links = []
+        entity_signals: Dict[str, list] = {}  # entity -> list of signal sources
+
+        # Signal 1: Bank statement circular pairs
+        if bank_metrics and bank_metrics.circular_credit_debit_pairs:
+            for txn in bank_metrics.circular_credit_debit_pairs:
+                party = txn.party
+                if party and party.lower() != "unknown":
+                    entity_signals.setdefault(party, []).append("bank_circular_pair")
+
+        # Signal 2: Bank statement shell transfers
+        if bank_metrics and bank_metrics.suspected_shell_company_transfers:
+            for transfer in bank_metrics.suspected_shell_company_transfers:
+                # Extract party name from transfer string
+                parts = transfer.split(" to ")
+                if len(parts) > 1:
+                    party = parts[-1].strip()
+                    entity_signals.setdefault(party, []).append("shell_transfer")
+
+        # Signal 3: Research findings mentioning entities
+        for finding in (research_findings or []):
+            snippet = ""
+            if hasattr(finding, "raw_snippet"):
+                snippet = finding.raw_snippet
+            elif isinstance(finding, dict):
+                snippet = finding.get("raw_snippet", "")
+            summary = ""
+            if hasattr(finding, "summary"):
+                summary = finding.summary
+            elif isinstance(finding, dict):
+                summary = finding.get("summary", "")
+
+            combined = f"{summary} {snippet}".lower()
+            # Only extract entities that are explicitly named subsidiaries/parent
+            if company_name.lower() in combined:
+                for keyword in ["parent", "subsidiary", "group company", "holding company"]:
+                    if keyword in combined:
+                        # The research finding itself is evidence
+                        severity = getattr(finding, "severity", None)
+                        if severity and str(severity) in ("CRITICAL", "HIGH"):
+                            source_name = getattr(finding, "source_name", "") or (finding.get("source_name", "") if isinstance(finding, dict) else "")
+                            entity_signals.setdefault(source_name or "Related Entity", []).append("research_finding")
+
+        # Signal 4: GST circular trading entities
+        if gst_mismatch and gst_mismatch.suspected_circular_trading:
+            entity_signals.setdefault("GST Circular Trading Party", []).append("gst_circular")
+
+        # Build edges only for entities with 2+ signals (MEDIUM+ confidence)
+        weak_associations = []
+        for entity, signals in entity_signals.items():
+            unique_signals = list(set(signals))
+            confidence_level = "LOW" if len(unique_signals) < 2 else ("MEDIUM" if len(unique_signals) == 2 else "HIGH")
+            node = {"id": entity, "type": "counterparty"}
+
+            if len(unique_signals) >= 2:
+                # Confirmed edge
+                nodes.append(node)
+                links.append({
+                    "source": company_name,
+                    "target": entity,
+                    "value": len(unique_signals) * 20,
+                    "confidence": confidence_level,
+                    "signals": unique_signals,
+                })
+            else:
+                weak_associations.append({
+                    "entity": entity,
+                    "signal": unique_signals[0] if unique_signals else "unknown",
+                    "confidence": "LOW",
+                })
+
+        return {
+            "nodes": nodes,
+            "links": links,
+            "weak_associations": weak_associations,
+        }
 
     @staticmethod
     def _pct_gap(a: float, b: float) -> float:

@@ -36,34 +36,43 @@ GRADE_BANDS = [
 def calculate_risk_premium(credit_score: float, sector: str, loan_type: str) -> float:
     """
     Interest pricing engine: base + score band premium + sector premium.
+    Always returns a non-negative rate. For REJECT cases, returns the
+    hypothetical rate (for informational purposes) rather than -1.
     """
     base_rate = settings.base_interest_rate
 
+    # Premium in basis points based on score band
     if 850 <= credit_score <= 900:
-        premium = 0.5
-    elif 800 <= credit_score <= 849:
-        premium = 1.0
-    elif 750 <= credit_score <= 799:
-        premium = 1.5
-    elif 700 <= credit_score <= 749:
-        premium = 2.5
-    elif 650 <= credit_score <= 699:
-        premium = 3.5
-    elif 600 <= credit_score <= 649:
-        premium = 5.0
+        premium_bps = 25     # AA grade
+    elif 750 <= credit_score < 850:
+        premium_bps = 60     # A- grade
+    elif 700 <= credit_score < 750:
+        premium_bps = 120    # B grade
+    elif 650 <= credit_score < 700:
+        premium_bps = 200    # C grade
+    elif 600 <= credit_score < 650:
+        premium_bps = 300    # D grade (borderline)
+    elif 450 <= credit_score < 600:
+        premium_bps = 300    # D grade
     else:
-        return -1.0
+        premium_bps = 300    # Below D — REJECT territory
 
     sector_map = {
-        "nbfc": 0.5,
-        "real_estate": 1.0,
-        "manufacturing": 0.0,
-        "it": -0.25,
+        "nbfc": 50,
+        "real_estate": 100,
+        "manufacturing": 0,
+        "it": 0,
+        "energy": 25,
+        "mining": 50,
     }
-    premium += sector_map.get(sector.lower(), 0.0)
+    premium_bps += sector_map.get(sector.lower(), 0)
     if loan_type.lower() == "unsecured":
-        premium += 0.5
-    return round(base_rate + premium, 2)
+        premium_bps += 50
+
+    # Never allow negative premium
+    premium_bps = max(premium_bps, 0)
+    final_rate = round(base_rate + premium_bps / 100.0, 2)
+    return final_rate
 
 
 @dataclass
@@ -129,13 +138,16 @@ class CreditScoringModel:
     ) -> CreditDecision:
         rule_hits = evaluate_hard_rules(features)
         if rule_hits:
+            # On hard REJECT: compute limit and rate for informational display,
+            # but mark as REJECT with clear "Not Sanctioned" semantics.
+            pricing = calculate_risk_premium(450.0, sector, loan_type)
             return CreditDecision(
                 credit_score=450.0,
                 score_band="300-599",
                 risk_grade="D",
                 recommendation="REJECT",
-                recommended_loan_amount=0.0,
-                recommended_interest_rate=-1.0,
+                recommended_loan_amount=requested_loan_amount,  # Show requested amount (for "Not Sanctioned (Requested: ₹X Cr)")
+                recommended_interest_rate=pricing,  # Informational rate, always positive
                 confidence_interval=[420.0, 480.0],
                 human_input_impact_points=0.0,
                 rule_hits=rule_hits,
@@ -156,11 +168,19 @@ class CreditScoringModel:
             recommendation = "CONDITIONAL_APPROVE"
 
         pricing = calculate_risk_premium(credit_score, sector, loan_type)
-        if pricing < 0:
-            recommendation = "REJECT"
-            recommended_amount = 0.0
+
+        if recommendation == "REJECT":
+            # On REJECT, show requested amount for display purposes
+            recommended_amount = requested_loan_amount
+        elif recommendation == "CONDITIONAL_APPROVE":
+            # Reduced limit for conditional approval
+            collateral_cov = features.get("collateral_coverage_ratio", 1.0)
+            reduced = requested_loan_amount * (credit_score / 900) * min(collateral_cov, 1.5)
+            recommended_amount = round(
+                max(0.25 * requested_loan_amount, min(reduced, requested_loan_amount)), 2
+            )
         else:
-            # Cap sanction to risk-adjusted exposure.
+            # Full APPROVE: risk-adjusted exposure
             exposure_factor = float(np.clip((credit_score - 500) / 350, 0.0, 1.1))
             recommended_amount = round(requested_loan_amount * exposure_factor, 2)
 

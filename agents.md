@@ -59,55 +59,33 @@ An end-to-end AI-powered **Credit Appraisal Engine** called **Intelli-Credit** t
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │                        NEXT.JS FRONTEND                             │
-│  [Upload Docs] [Qualitative Notes] [SHAP Chart] [CAM Download]     │
-│  [Chat with CAM]                                                    │
+│  Marketing: / and /about                                            │
+│  App: /app/start → /app/upload → /app/notes → /app/pipeline        │
+│       → /app/score /results /explain /chat /cam                    │
 └────────────────────────────┬────────────────────────────────────────┘
                              │ REST + SSE (streaming)
 ┌────────────────────────────▼────────────────────────────────────────┐
 │                      FASTAPI BACKEND                                │
-│  /ingest  /run-pipeline  /qualitative  /score  /cam  /chat         │
+│  Primary APIs: /api/v1/*                                            │
+│  Compatibility APIs: /ingest /run-pipeline /score /cam /chat        │
 └───┬────────────────────────────────────────────────────────────┬────┘
     │                                                            │
 ┌───▼─────────────────────────────────┐        ┌───────────────▼────┐
-│      LANGGRAPH AGENT PIPELINE       │        │    POSTGRESQL DB    │
-│                                     │        │  companies         │
-│  ┌──────────────────────────────┐   │        │  documents         │
-│  │  Node 1: Document Router     │   │        │  extracted_data    │
-│  │  (classify PDF type)         │   │        │  research_results  │
-│  └──────────┬───────────────────┘   │        │  risk_scores       │
-│             │                       │        │  cam_outputs       │
-│  ┌──────────▼───────────────────┐   │        └────────────────────┘
-│  │  Node 2: Ingestion Agent     │   │
-│  │  Sarvam Vision + pdfplumber  │   │        ┌────────────────────┐
-│  │  + Tesseract fallback        │   │        │    QDRANT          │
-│  └──────────┬───────────────────┘   │        │  document_chunks   │
-│             │                       │        │  research_chunks   │
-│  ┌──────────▼───────────────────┐   │        └────────────────────┘
-│  │  Node 3: GST Reconciliation  │   │
-│  │  Agent (circular trade check)│   │
-│  └──────────┬───────────────────┘   │
-│             │                       │
-│  ┌──────────▼───────────────────┐   │
-│  │  Node 4: Web Research Agent  │   │
-│  │  Serper + MCA21 + eCourts    │   │
-│  │  + RBI/SEBI scraper          │   │
-│  └──────────┬───────────────────┘   │
-│             │                       │
-│  ┌──────────▼───────────────────┐   │
-│  │  Node 5: Human-in-the-Loop   │   │
-│  │  (Credit Officer inputs)     │   │
-│  └──────────┬───────────────────┘   │
-│             │                       │
-│  ┌──────────▼───────────────────┐   │
-│  │  Node 6: Hybrid Risk Scorer  │   │
-│  │  Rules + XGBoost + SHAP      │   │
-│  └──────────┬───────────────────┘   │
-│             │                       │
-│  ┌──────────▼───────────────────┐   │
-│  │  Node 7: CAM Generator       │   │
-│  │  Gemini + python-docx + PDF  │   │
-│  └──────────────────────────────┘   │
-└─────────────────────────────────────┘
+│   Core Pipeline (active runtime)    │        │    POSTGRESQL DB    │
+│   backend/core/pipeline_service.py  │        │  companies          │
+│                                     │        │  documents          │
+│  OCR: fitz → pdfplumber → Qwen VL   │        │  due_diligence_*    │
+│  GST/Bank/ITR cross-validation      │        │  analysis_runs      │
+│  Research: Firecrawl + scrapers     │        │  research_findings  │
+│  Risk model + explainability        │        │  risk_scores        │
+│  CAM generation (.docx; .pdf route) │        │  cam_outputs        │
+└───┬─────────────────────────────────┘        └─────────────────────┘
+    │
+┌───▼─────────────────────────────────┐        ┌──────────────────────┐
+│  LangGraph pipeline (legacy path)   │        │        QDRANT        │
+│  backend/agents/* (still available) │        │  document_chunks     │
+└──────────────────────────────────────┘        │  research_chunks     │
+                                                └──────────────────────┘
 ```
 
 ---
@@ -115,31 +93,49 @@ An end-to-end AI-powered **Credit Appraisal Engine** called **Intelli-Credit** t
 ## 3. Repository Structure
 
 ```
-intelli-credit/
+IITHYD_Argus_v1/
 ├── backend/
 │   ├── main.py                        # FastAPI entrypoint
 │   ├── config.py                      # All env vars and constants
 │   ├── database.py                    # PostgreSQL connection (SQLAlchemy)
+│   ├── api/
+│   │   └── routes/                    # Primary /api/v1 endpoints
+│   │       ├── upload.py              # companies + document upload
+│   │       ├── analysis.py            # analyze, status SSE, results, explain
+│   │       ├── due_diligence.py       # DD preview + submission
+│   │       ├── research.py            # research findings
+│   │       ├── report.py              # CAM docx/pdf downloads
+│   │       ├── chat.py                # company-scoped CAM chat
+│   │       └── health.py              # health + integration checks
+│   ├── core/
+│   │   ├── pipeline_service.py        # Active orchestrator
+│   │   ├── ingestion/                 # fitz/pdfplumber/Qwen OCR + GST/bank/ITR
+│   │   ├── research/                  # Firecrawl + MCA/eCourts/news + DD AI
+│   │   ├── ml/                        # features + scorer + explainer
+│   │   └── report/                    # CAM generator
 │   ├── models/
 │   │   └── db_models.py               # SQLAlchemy ORM models
 │   ├── agents/
-│   │   ├── graph.py                   # LangGraph graph definition (MAIN ORCHESTRATOR)
+│   │   ├── graph.py                   # LangGraph graph definition (legacy path)
 │   │   ├── state.py                   # LangGraph shared state schema
 │   │   ├── nodes/
 │   │   │   ├── document_router.py     # Node 1: classify document type
-│   │   │   ├── ingestion_agent.py     # Node 2: OCR + extraction
+│   │   │   ├── ingestion_agent.py     # Node 2: OCR + extraction (Qwen fallback)
 │   │   │   ├── gst_reconciler.py      # Node 3: GST vs bank cross-check
 │   │   │   ├── research_agent.py      # Node 4: web research
 │   │   │   ├── hitl_node.py           # Node 5: human-in-the-loop pause
 │   │   │   ├── risk_scorer.py         # Node 6: hybrid scoring
 │   │   │   └── cam_generator.py       # Node 7: CAM generation
 │   │   └── tools/
-│   │       ├── sarvam_tool.py         # Sarvam Vision API wrapper
+│   │       ├── sarvam_tool.py         # Sarvam Vision API wrapper (optional)
 │   │       ├── serper_tool.py         # Google Search via Serper
 │   │       ├── mca_scraper.py         # MCA21 portal scraper
 │   │       ├── ecourts_scraper.py     # eCourts portal scraper
 │   │       ├── rbi_scraper.py         # RBI/SEBI regulatory scraper
 │   │       └── circular_trade.py      # NetworkX graph fraud detector
+│   ├── databricks/                    # Spark/Delta sink integration
+│   ├── schemas/                       # Pydantic API/domain schemas
+│   ├── tasks/                         # Celery worker tasks
 │   ├── scoring/
 │   │   ├── rules_engine.py            # Layer 1: deterministic rules
 │   │   ├── ml_calibrator.py           # Layer 2: XGBoost model
@@ -161,22 +157,34 @@ intelli-credit/
 │   └── requirements.txt
 ├── frontend/
 │   ├── app/
-│   │   ├── page.tsx                   # Landing / company search
-│   │   ├── upload/page.tsx            # Document upload
-│   │   ├── pipeline/page.tsx          # Live agent progress stream
-│   │   ├── notes/page.tsx             # Qualitative notes input
-│   │   ├── score/page.tsx             # SHAP chart + risk breakdown
-│   │   ├── cam/page.tsx               # CAM preview + download
-│   │   └── chat/page.tsx              # Chat with CAM (RAG)
+│   │   ├── page.tsx                   # Marketing landing
+│   │   ├── about/page.tsx             # Marketing about page
+│   │   └── app/                       # Product app routes
+│   │       ├── start/page.tsx         # Company/session start
+│   │       ├── upload/page.tsx        # Document + optional borrower input
+│   │       ├── notes/page.tsx         # Credit officer due diligence
+│   │       ├── pipeline/page.tsx      # Live SSE pipeline progress
+│   │       ├── score/page.tsx         # Score summary + SHAP
+│   │       ├── results/page.tsx       # Advanced dashboard
+│   │       ├── explain/page.tsx       # Explainability view
+│   │       ├── chat/page.tsx          # Chat with CAM
+│   │       └── cam/page.tsx           # CAM preview + download
 │   ├── components/
 │   │   ├── UploadZone.tsx
 │   │   ├── AgentProgressLog.tsx       # SSE streaming log
 │   │   ├── ShapChart.tsx              # Recharts horizontal bar
 │   │   ├── RiskGauge.tsx              # Circular risk meter
+│   │   ├── FiveCsRadar.tsx
+│   │   ├── TimelineView.tsx
+│   │   ├── ResearchFeed.tsx
+│   │   ├── StressTestPanel.tsx
+│   │   ├── FraudGraph.tsx
 │   │   ├── CamPreview.tsx
 │   │   └── ChatInterface.tsx
 │   ├── lib/
 │   │   └── api.ts                     # API client
+│   ├── store/
+│   │   └── analysisStore.ts           # Zustand persisted workflow state
 │   └── package.json
 ├── ml/
 │   ├── train_model.py                 # XGBoost training script
@@ -201,12 +209,12 @@ fastapi==0.115.0
 uvicorn[standard]==0.30.0
 python-dotenv==1.0.0
 pydantic==2.7.0
+pydantic-settings==2.2.0
 
 # LangGraph + LangChain
 langgraph==0.2.0
-langchain==0.3.0
-langchain-google-genai==2.0.0
-langchain-community==0.3.0
+langchain==0.2.17
+langchain-community==0.2.17
 
 # PDF Processing
 pdfplumber==0.11.0
@@ -226,6 +234,7 @@ sqlalchemy==2.0.0
 asyncpg==0.29.0
 alembic==1.13.0
 psycopg2-binary==2.9.9
+redis==5.0.8
 
 # Vector Store
 qdrant-client==1.11.0
@@ -239,24 +248,39 @@ scikit-learn==1.5.0
 pandas==2.2.0
 numpy==1.26.0
 networkx==3.3.0
+spacy==3.7.5
+transformers==4.44.2
 
 # Document Generation
 python-docx==1.1.0
 reportlab==4.2.0
 
-# Google Gemini
+# LLM/Providers
 google-generativeai==0.8.0
+openai==1.30.0
+huggingface-hub==0.33.2
+anthropic==0.28.0
 
 # Utilities
 python-multipart==0.0.9
 aiofiles==24.1.0
+structlog==24.4.0
+
+# Orchestration / Big data / Research
+celery==5.4.0
+prefect==2.20.3
+pyspark==3.5.2
+delta-spark==3.2.0
+databricks-connect==14.3.0
+firecrawl-py==4.18.0
+tenacity==8.3.0
 ```
 
 ### Frontend (`frontend/package.json` deps)
 ```json
 {
   "dependencies": {
-    "next": "14.2.0",
+    "next": "^14.2.35",
     "react": "^18",
     "react-dom": "^18",
     "typescript": "^5",
@@ -264,6 +288,10 @@ aiofiles==24.1.0
     "recharts": "^2.12",
     "lucide-react": "^0.400",
     "axios": "^1.7",
+    "@tanstack/react-query": "^5.59.0",
+    "zustand": "^4.5.5",
+    "d3": "^7.9.0",
+    "react-pdf": "^9.2.1",
     "react-dropzone": "^14.2",
     "react-markdown": "^9.0",
     "eventsource-parser": "^2.0"
@@ -279,6 +307,9 @@ aiofiles==24.1.0
 ```env
 # Database
 DATABASE_URL=postgresql+asyncpg://postgres:password@localhost:5432/intellicredit
+REDIS_URL=redis://localhost:6379/0
+CELERY_BROKER_URL=redis://localhost:6379/0
+CELERY_RESULT_BACKEND=redis://localhost:6379/1
 
 # Qdrant
 QDRANT_URL=http://localhost:6333
@@ -286,11 +317,19 @@ QDRANT_COLLECTION_DOCUMENTS=document_chunks
 QDRANT_COLLECTION_RESEARCH=research_chunks
 
 # LLMs
+HUGGINGFACE_API_TOKEN=hf_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 GEMINI_API_KEY=your_gemini_api_key
-SARVAM_API_KEY=your_sarvam_api_key
+QWEN_VL_MODEL=Qwen/Qwen2.5-VL-7B-Instruct
+QWEN_VL_PROVIDER=huggingface
+QWEN_VL_API_KEY=
+QWEN_VL_BASE_URL=https://router.huggingface.co/v1
+QWEN_VL_TIMEOUT_SEC=90
+SARVAM_API_KEY=optional_legacy_only
 
 # Web Research
-SERPER_API_KEY=your_serper_api_key
+FIRECRAWL_API_KEY=fc-your_firecrawl_key
+SERPER_API_KEY=optional
+RESEARCH_MODE=live
 
 # App
 SECRET_KEY=your_secret_key
@@ -300,7 +339,6 @@ MAX_FILE_SIZE_MB=50
 
 ### `docker-compose.yml`
 ```yaml
-version: '3.8'
 services:
   postgres:
     image: postgres:16
@@ -308,25 +346,50 @@ services:
       POSTGRES_DB: intellicredit
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
-    ports:
-      - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
 
   qdrant:
     image: qdrant/qdrant:latest
-    ports:
-      - "6333:6333"
     volumes:
       - qdrantdata:/qdrant/storage
+    healthcheck:
+      test: [ "CMD-SHELL", "grep -q ':18BD' /proc/net/tcp /proc/net/tcp6 || exit 1" ]
+
+  redis:
+    image: redis:7-alpine
 
   backend:
     build: ./backend
     ports:
-      - "8000:8000"
-    env_file: ./backend/.env
+      - "8001:8000"
+    env_file: ./.env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:password@postgres:5432/intellicredit
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - QDRANT_URL=http://qdrant:6333
     depends_on:
       - postgres
+      - qdrant
+      - redis
+
+  worker:
+    build: ./backend
+    env_file: ./.env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:password@postgres:5432/intellicredit
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - QDRANT_URL=http://qdrant:6333
+    command: celery -A backend.tasks.celery_app.celery_app worker --loglevel=info
+    depends_on:
+      - postgres
+      - redis
       - qdrant
 
   frontend:
@@ -334,7 +397,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - NEXT_PUBLIC_API_URL=http://localhost:8001
 
 volumes:
   pgdata:
@@ -1800,160 +1863,40 @@ def _compute_de(f):
 
 ## 11. Module 6: FastAPI Backend
 
-### `routers/pipeline.py`
-```python
-"""
-POST /run-pipeline — Start the LangGraph pipeline for a company
-GET /pipeline-status/{run_id} — SSE stream of live agent progress logs
+### Active API Surface (Current)
 
-The SSE stream is consumed by Next.js AgentProgressLog component
-to show real-time pipeline status to the Credit Officer.
-"""
+Primary backend routes are versioned and live under `backend/api/routes/*`:
 
-from fastapi import APIRouter, Request
-from fastapi.responses import StreamingResponse
-from agents.graph import credit_graph
-import asyncio
-import json
+- `POST /api/v1/companies` — create company context
+- `POST /api/v1/companies/{id}/documents` — upload files
+- `POST /api/v1/companies/{id}/dd-input` — due diligence submission
+- `POST /api/v1/companies/{id}/analyze` — trigger end-to-end analysis
+- `GET /api/v1/companies/{id}/status` — SSE status/log stream
+- `GET /api/v1/companies/{id}/results` — merged decision payload
+- `GET /api/v1/companies/{id}/explain` — explanation payload
+- `GET /api/v1/companies/{id}/research` — normalized findings
+- `GET /api/v1/companies/{id}/report` — CAM `.docx`
+- `GET /api/v1/companies/{id}/report/pdf` — CAM `.pdf` (if available)
+- `POST /api/v1/companies/{id}/chat` — RAG chat over CAM + documents
+- `GET /api/v1/health`, `GET /api/v1/health/integrations` — readiness checks
 
-router = APIRouter()
+Legacy compatibility routes remain mounted under `backend/routers/*`:
+`/ingest`, `/run-pipeline`, `/pipeline-stream/{company_id}`, `/score/{company_id}`, `/cam/{company_id}`, `/chat`.
 
-@router.post("/run-pipeline")
-async def run_pipeline(company_id: str, company_name: str, document_paths: list[str]):
-    """Initialize and start the LangGraph pipeline."""
-    initial_state = {
-        "company_id": company_id,
-        "company_name": company_name,
-        "uploaded_document_paths": document_paths,
-        "documents": [],
-        "extracted_financials": {},
-        "gst_bank_mismatch_pct": None,
-        "circular_trading_detected": False,
-        "circular_trading_entities": [],
-        "gst_flags": [],
-        "news_summary": "",
-        "mca_data": {},
-        "litigation_data": [],
-        "rbi_regulatory_flags": [],
-        "promoter_background": {},
-        "research_red_flags": [],
-        "qualitative_notes": None,
-        "site_visit_capacity_pct": None,
-        "management_assessment": None,
-        "hitl_complete": False,
-        "rule_based_score": None,
-        "ml_stress_probability": None,
-        "final_risk_score": None,
-        "risk_category": None,
-        "shap_values": None,
-        "rule_violations": [],
-        "risk_strengths": [],
-        "decision": None,
-        "recommended_loan_limit_crore": None,
-        "interest_rate_premium_bps": None,
-        "decision_rationale": "",
-        "cam_text": None,
-        "cam_docx_path": None,
-        "cam_pdf_path": None,
-        "current_node": "start",
-        "log": [],
-        "errors": []
-    }
-    
-    config = {"configurable": {"thread_id": company_id}}
-    
-    # Run until HITL interrupt
-    for event in credit_graph.stream(initial_state, config=config):
-        pass  # pipeline runs in background
-    
-    return {"run_id": company_id, "status": "running_until_hitl"}
+### Runtime Orchestration
 
-@router.get("/pipeline-stream/{company_id}")
-async def pipeline_stream(company_id: str):
-    """SSE endpoint — streams log messages to frontend."""
-    async def event_generator():
-        config = {"configurable": {"thread_id": company_id}}
-        state = credit_graph.get_state(config)
-        
-        sent_count = 0
-        while True:
-            current_state = credit_graph.get_state(config)
-            logs = current_state.values.get("log", [])
-            
-            for log_entry in logs[sent_count:]:
-                yield f"data: {json.dumps({'log': log_entry})}\n\n"
-                sent_count += 1
-            
-            if current_state.values.get("current_node") == "cam_generator":
-                yield f"data: {json.dumps({'status': 'complete'})}\n\n"
-                break
-            
-            await asyncio.sleep(1)
-    
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
+The active runtime orchestrator is:
 
-@router.post("/submit-qualitative/{company_id}")
-async def submit_qualitative(company_id: str, notes: str, capacity_pct: float = None, mgmt: str = None):
-    """Resume pipeline after Credit Officer submits qualitative notes."""
-    config = {"configurable": {"thread_id": company_id}}
-    
-    credit_graph.update_state(config, {
-        "qualitative_notes": notes,
-        "site_visit_capacity_pct": capacity_pct,
-        "management_assessment": mgmt,
-        "hitl_complete": True
-    })
-    
-    # Resume graph from HITL node
-    for event in credit_graph.stream(None, config=config):
-        pass
-    
-    return {"status": "resumed"}
-```
+- `backend/core/pipeline_service.py` (`IntelliCreditPipeline`)
 
-### `routers/chat.py`
-```python
-"""
-POST /chat — Chat with the CAM (RAG over extracted documents + research)
-"Why was this flagged?" → retrieves relevant chunks from Qdrant + Gemini answers
+It runs:
 
-This is the "Chat with CAM" feature in the Next.js portal.
-"""
-
-from fastapi import APIRouter
-import google.generativeai as genai
-import os
-from vector_store.qdrant_client import search_chunks
-
-router = APIRouter()
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-gemini = genai.GenerativeModel("gemini-1.5-pro")
-
-@router.post("/chat")
-async def chat_with_cam(company_id: str, message: str, conversation_history: list = []):
-    """RAG-powered chat interface over all company documents and research."""
-    
-    # Retrieve relevant chunks from Qdrant
-    relevant_chunks = search_chunks(query=message, company_id=company_id, top_k=5)
-    context = "\n\n".join([c["chunk_text"] for c in relevant_chunks])
-    
-    system_prompt = """You are a credit analysis assistant. 
-    Answer questions about this specific company's credit appraisal.
-    Base your answers ONLY on the provided context (extracted documents and research).
-    If information is not in the context, say "This information was not found in the available documents."
-    Be specific — cite which document the information came from.
-    Use Indian banking terminology."""
-    
-    full_prompt = f"""{system_prompt}
-    
-CONTEXT FROM COMPANY DOCUMENTS:
-{context}
-
-QUESTION: {message}"""
-    
-    response = gemini.generate_content(full_prompt)
-    return {"response": response.text, "sources": [c.get("doc_type") for c in relevant_chunks]}
-```
+1. ingestion (`core/ingestion/*`)
+2. cross-validation and GST mismatch checks
+3. web research (`core/research/*`)
+4. feature engineering + ML scoring (`core/ml/*`)
+5. CAM generation (`core/report/cam_generator.py`)
+6. persistence to `analysis_runs`, `risk_scores`, `cam_outputs`, etc.
 
 ---
 
@@ -1961,59 +1904,33 @@ QUESTION: {message}"""
 
 ### Page Structure
 
-**`app/pipeline/page.tsx`** — Live Agent Progress
+Current frontend uses App Router with product routes nested under `app/app/*`:
+
+- `app/page.tsx` — marketing landing
+- `app/about/page.tsx` — project architecture story
+- `app/app/start/page.tsx` — starts session + company context
+- `app/app/upload/page.tsx` — application details + documents + optional borrower input
+- `app/app/notes/page.tsx` — due diligence notes for credit officer
+- `app/app/pipeline/page.tsx` — live pipeline status stream
+- `app/app/score/page.tsx` — score summary + SHAP
+- `app/app/results/page.tsx` — full dashboard (Five Cs, anomalies, timeline, research)
+- `app/app/explain/page.tsx` — decision explainability narrative
+- `app/app/chat/page.tsx` — chat with CAM/data context
+- `app/app/cam/page.tsx` — CAM preview + report download
+
+### `app/app/pipeline/page.tsx` — Live Agent Progress
 ```typescript
-// Real-time SSE log of agent progress
-// Shows: [Router] Classified 4 documents → [Ingestion] Annual report extracted...
-// Includes spinner per node, green check when complete
-// "Waiting for your input..." when HITL pause is reached
-
-'use client'
-import { useEffect, useState } from 'react'
-
-export default function PipelinePage({ companyId }: { companyId: string }) {
-  const [logs, setLogs] = useState<string[]>([])
-  const [hitlReached, setHitlReached] = useState(false)
-
-  useEffect(() => {
-    const es = new EventSource(`/api/pipeline-stream/${companyId}`)
-    
-    es.onmessage = (e) => {
-      const data = JSON.parse(e.data)
-      if (data.log) setLogs(prev => [...prev, data.log])
-      if (data.status === 'hitl_pause') setHitlReached(true)
-      if (data.status === 'complete') es.close()
-    }
-    
-    return () => es.close()
-  }, [companyId])
-
-  return (
-    <div className="font-mono text-sm bg-gray-900 text-green-400 p-6 rounded-xl min-h-96">
-      {logs.map((log, i) => <div key={i}>▸ {log}</div>)}
-      {hitlReached && (
-        <div className="mt-4 text-yellow-400 animate-pulse">
-          ⏸ Pipeline paused — waiting for your qualitative input...
-        </div>
-      )}
-    </div>
-  )
-}
+// Streams /api/v1/companies/{companyId}/status using AgentProgressLog
+// Shows step progress %, audit logs, and completion redirect to /app/score
 ```
 
-**`app/score/page.tsx`** — SHAP Chart
+### `app/app/score/page.tsx` — Score + SHAP
 ```typescript
 // Horizontal bar chart showing SHAP feature contributions
-// Red bars = increases risk (bad)
-// Green bars = reduces risk (good)
-// Uses Recharts BarChart
-
-// Data format expected:
-// { feature: "DSCR", value: -0.32, direction: "negative" }
-// { feature: "gst_mismatch", value: +0.28, direction: "positive" }
+// Uses RiskGauge + ShapChart components with API-backed values
 ```
 
-**`components/ShapChart.tsx`**
+### `components/ShapChart.tsx`
 ```typescript
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Cell } from 'recharts'
 
@@ -2033,7 +1950,6 @@ export function ShapChart({ data }: { data: ShapEntry[] }) {
     </BarChart>
   )
 }
-// Red = increases stress (bad), Green = reduces stress (good)
 ```
 
 ---
@@ -2057,7 +1973,7 @@ CREATE TABLE documents (
     company_id UUID REFERENCES companies(id),
     file_path TEXT NOT NULL,
     doc_type VARCHAR(50),  -- ANNUAL_REPORT, GST_FILING, etc.
-    extraction_method VARCHAR(20),  -- pdfplumber, sarvam, tesseract
+    extraction_method VARCHAR(20),  -- fitz/pdfplumber/qwen/sarvam/tesseract
     raw_text TEXT,
     extracted_data JSONB,
     created_at TIMESTAMP DEFAULT NOW()
@@ -2105,6 +2021,41 @@ CREATE TABLE chat_history (
     message TEXT,
     response TEXT,
     sources JSONB,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE analysis_runs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    company_id UUID REFERENCES companies(id),
+    status VARCHAR(30) NOT NULL,
+    current_step VARCHAR(100),
+    progress_pct FLOAT NOT NULL DEFAULT 0,
+    audit_log JSONB NOT NULL DEFAULT '[]'::jsonb,
+    result_payload JSONB,
+    error_message TEXT,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE research_finding_records (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    company_id UUID REFERENCES companies(id),
+    finding_type VARCHAR(40) NOT NULL,
+    severity VARCHAR(20) NOT NULL,
+    source_name VARCHAR(100) NOT NULL,
+    source_url TEXT NOT NULL,
+    summary TEXT NOT NULL,
+    raw_snippet TEXT,
+    confidence FLOAT NOT NULL DEFAULT 0.7,
+    date_of_finding TIMESTAMP,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE due_diligence_records (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    company_id UUID REFERENCES companies(id),
+    payload JSONB NOT NULL,
+    llm_insight JSONB,
     created_at TIMESTAMP DEFAULT NOW()
 );
 ```
@@ -2174,71 +2125,32 @@ def search_chunks(query: str, company_id: str, top_k: int = 5) -> list:
 ## 15. End-to-End Data Flow
 
 ```
-Credit Officer uploads 4 PDFs for "Sharma Textiles Pvt Ltd"
+Credit Officer starts new assessment
             ↓
-POST /ingest → files saved to /uploads/sharma_textiles/
+POST /api/v1/companies
             ↓
-POST /run-pipeline → LangGraph starts
+POST /api/v1/companies/{id}/documents
             ↓
-Node 1 [Document Router]:
-  → PDF 1: classified as ANNUAL_REPORT
-  → PDF 2: classified as GST_FILING (GSTR-3B)
-  → PDF 3: classified as BANK_STATEMENT
-  → PDF 4: classified as LEGAL_NOTICE
+POST /api/v1/companies/{id}/dd-input
             ↓
-Node 2 [Ingestion Agent]:
-  → PDF 1 (Annual Report): pdfplumber → 45k chars → Gemini extracts:
-      {revenue_crore: [120, 110, 95], dscr: 0.92, ebitda_margin: 8.2%...}
-  → PDF 2 (GST): pdfplumber → gstin, outward_supplies: ₹118Cr
-  → PDF 3 (Bank): pdfplumber → total_credits: ₹89Cr
-  → PDF 4 (Legal, Hindi): pdfplumber fails → Sarvam Vision → "DRT recovery case filed"
-  → All chunks embedded → Qdrant
+POST /api/v1/companies/{id}/analyze
             ↓
-Node 3 [GST Reconciler]:
-  → GST declared: ₹118Cr vs Bank credits: ₹89Cr
-  → Mismatch: 24.6% (just below 25% threshold, WARN not CRITICAL)
-  → Circular trading check: no circular pattern found
+GET /api/v1/companies/{id}/status (SSE)
+  → OCR extraction
+  → GST/bank/ITR reconciliation
+  → research agent (MCA + eCourts + web/news)
+  → scoring + explainability
+  → CAM generation
             ↓
-Node 4 [Research Agent]:
-  → Serper: "Sharma Textiles NPA HDFC 2023" → 1 article found → RED FLAG
-  → MCA21: 2 directors, 4 registered charges → normal
-  → eCourts: 1 DRT recovery case pending → CRITICAL FLAG
-  → RBI: textile sector — no active restrictions
-  → Promoter: "Rajesh Sharma" — clear
+GET /api/v1/companies/{id}/results
+  → decision + features + anomalies + due_diligence + audit_events
             ↓
-Node 5 [HITL — PAUSE]:
-  → Frontend shows: "Pipeline paused — please enter qualitative notes"
-  → Credit Officer inputs: "Factory at 65% capacity. Management evasive on working capital."
-  → POST /submit-qualitative → pipeline resumes
-            ↓
-Node 6 [Risk Scorer]:
-  → Rules triggered:
-      CRITICAL: CAP_001 — DSCR 0.92 < 1.0 (-40 pts)
-      CRITICAL: LIT_002 — DRT recovery case (-40 pts)
-      HIGH: CHAR_001 — negative news found (-25 pts)
-      MEDIUM: COND_001 — 65% capacity (-15 pts) [from qualitative]
-  → Rule score: 100 - 40 - 40 - 25 - 15 = -20 → capped at 0 → Score: 0
-  → But wait: -20 means at least 2 CRITICAL violations → auto REJECT
-  → ML stress probability: 0.88
-  → Final score: 0.6×0 + 0.4×12 = 4.8 → CRITICAL
-  → SHAP: top factors: dscr (-0.41), recovery_suit (-0.38), news (-0.22)
-            ↓
-Node 7 [CAM Generator]:
-  → Gemini writes full CAM with all structured inputs
-  → Decision: REJECT
-  → Rationale: "Rejected due to DSCR below 1.0 (0.92x) indicating insufficient
-    debt service capacity, active DRT recovery suit (prior default indicator),
-    negative news of NPA classification, and management concerns flagged during
-    site visit."
-  → python-docx → sharma_textiles_CAM.docx
-  → ReportLab → sharma_textiles_CAM.pdf
-            ↓
-Credit Officer downloads CAM, asks: "Why was the DRT case flagged?"
-  → POST /chat → Qdrant retrieves legal notice chunks → Gemini answers:
-    "A Debt Recovery Tribunal case was found in the uploaded legal notice (PDF 4).
-     The notice, dated March 2023, was filed by HDFC Bank seeking recovery of
-     ₹4.2 Crore from Sharma Textiles Pvt Ltd. This indicates a prior loan default."
+GET /api/v1/companies/{id}/explain, /research, /report, /chat
+  → explainability + research feed + CAM download + Q&A
 ```
+
+Legacy equivalents (`/ingest`, `/run-pipeline`, `/pipeline-stream`) remain available,
+but the frontend flow in this repository is primarily wired to `/api/v1/*`.
 
 ---
 
@@ -2352,3 +2264,5 @@ def test_circular_trade_detection():
 
 *Built for IIT Hyderabad × Vivriti Capital Intelli-Credit Hackathon — March 2026*
 *Stack: Python · FastAPI · LangGraph · Sarvam Vision · Gemini · XGBoost · SHAP · Next.js · PostgreSQL · Qdrant*
+
+

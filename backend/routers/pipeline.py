@@ -79,10 +79,13 @@ async def run_pipeline(
 
     config = {"configurable": {"thread_id": company_id}}
 
-    # Run until HITL interrupt
-    try:
+    # Run until HITL interrupt (offloaded to thread to avoid blocking event loop)
+    def _run_graph():
         for event in credit_graph.stream(initial_state, config=config):
             pass
+
+    try:
+        await asyncio.to_thread(_run_graph)
     except Exception as e:
         logger.error(f"[Pipeline] Error during run: {e}")
 
@@ -164,10 +167,13 @@ async def submit_qualitative(
         "hitl_complete": True,
     })
 
-    # Resume graph from HITL node
-    try:
+    # Resume graph from HITL node (offloaded to thread to avoid blocking event loop)
+    def _resume_graph():
         for event in credit_graph.stream(None, config=config):
             pass
+
+    try:
+        await asyncio.to_thread(_resume_graph)
     except Exception as e:
         logger.error(f"[Pipeline] Resume error: {e}")
         return {"status": "error", "detail": str(e)}

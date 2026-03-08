@@ -15,7 +15,34 @@ class ECourtsScraper:
         findings: List[ResearchFinding] = []
         low = company_name.lower()
 
-        if "agri" in low:
+        if "vedanta" in low:
+            findings.extend([
+                ResearchFinding(
+                    source_url="https://main.sci.gov.in/supremecourt/2019/14812",
+                    source_name="eCourts (Mock)",
+                    finding_type=FindingType.LITIGATION,
+                    summary="SLP(C) No. 14812/2019 — Sterlite Copper environmental liability. Supreme Court. Amount: ₹25,000 Cr+. Status: Pending.",
+                    severity=Severity.CRITICAL,
+                    date_of_finding=date(2025, 3, 10),
+                    confidence=0.92,
+                    raw_snippet="Tamil Nadu Pollution Control Board vs Vedanta Limited (Sterlite Copper Tuticorin). Supreme Court SLP(C) 14812/2019.",
+                    score_impact=-12.0,
+                    cam_section="character",
+                ),
+                ResearchFinding(
+                    source_url="https://ecourts.example/vedanta-nclt-goa",
+                    source_name="eCourts (Mock)",
+                    finding_type=FindingType.LITIGATION,
+                    summary="Vedanta: Goa mining lease dispute at NCLT — government seeking forfeiture of mining rights.",
+                    severity=Severity.HIGH,
+                    date_of_finding=date(2025, 5, 18),
+                    confidence=0.80,
+                    raw_snippet="NCLT Goa Bench: Government of Goa vs Sesa Goa (Vedanta subsidiary). Mining lease renewal contested.",
+                    score_impact=-6.0,
+                    cam_section="conditions",
+                ),
+            ])
+        elif "agri" in low:
             findings.append(
                 ResearchFinding(
                     source_url="https://ecourts.example/case/2024-cs-102",

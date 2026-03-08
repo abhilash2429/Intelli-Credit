@@ -12,6 +12,39 @@ from backend.config import settings
 from backend.core.ml.credit_scorer import CreditScoringModel
 from backend.schemas.credit import Explanation
 
+# Explicit direction map: determines how SHAP values should be narrated.
+# "higher_is_worse" = a positive SHAP value on this feature WEAKENS credit quality
+# "higher_is_better" = a positive SHAP value on this feature SUPPORTS credit quality
+FEATURE_DIRECTION_MAP: Dict[str, str] = {
+    "has_going_concern_doubt": "higher_is_worse",
+    "has_promoter_fraud_news": "higher_is_worse",
+    "has_circular_trading_signals": "higher_is_worse",
+    "has_nclt_proceedings": "higher_is_worse",
+    "has_mca_struck_off_associates": "higher_is_worse",
+    "has_sector_headwinds": "higher_is_worse",
+    "has_auditor_qualification": "higher_is_worse",
+    "has_litigation": "higher_is_worse",
+    "has_revenue_inflation_signals": "higher_is_worse",
+    "debt_equity_ratio": "higher_is_worse",
+    "gstr3b_vs_2a_itc_gap": "higher_is_worse",
+    "due_diligence_risk_adjustment": "higher_is_worse",
+    "ebitda_margin": "higher_is_better",
+    "revenue_cagr_3yr": "higher_is_better",
+    "interest_coverage_ratio": "higher_is_better",
+    "collateral_coverage_ratio": "higher_is_better",
+    "dscr": "higher_is_better",
+    "cibil_commercial_score": "higher_is_better",
+    "management_integrity_score": "higher_is_better",
+    "factory_capacity_utilization": "higher_is_better",
+    "current_ratio": "higher_is_better",
+    "gst_banking_ratio": "higher_is_better",
+    "itr_gst_consistency_score": "higher_is_better",
+    "average_bank_balance_to_limit_ratio": "higher_is_better",
+    "gst_return_filing_consistency": "higher_is_better",
+    "mca_filing_compliance_score": "higher_is_better",
+    "collateral_type_score": "higher_is_better",
+}
+
 
 class CreditExplainer:
     """
@@ -50,14 +83,26 @@ class CreditExplainer:
     def generate_explanation(self, features: Dict[str, float]) -> Explanation:
         shap_map = self.shap_values(features)
         ranked = sorted(shap_map.items(), key=lambda kv: abs(kv[1]), reverse=True)
-        positives = [f for f in ranked if f[1] >= 0][:3]
-        negatives = [f for f in ranked if f[1] < 0][:3]
 
-        top_positive_factors = [self._factor_text(name, value, positive=True) for name, value in positives]
-        top_negative_factors = [self._factor_text(name, value, positive=False) for name, value in negatives]
+        # Use feature direction map to correctly classify positive/negative factors
+        top_positive_factors: List[str] = []
+        top_negative_factors: List[str] = []
+
+        for feature, shap_val in ranked:
+            if len(top_positive_factors) >= 3 and len(top_negative_factors) >= 3:
+                break
+            text = self._factor_text_directed(feature, shap_val)
+            is_credit_positive = self._is_credit_positive(feature, shap_val)
+            if is_credit_positive and len(top_positive_factors) < 3:
+                top_positive_factors.append(text)
+            elif not is_credit_positive and len(top_negative_factors) < 3:
+                top_negative_factors.append(text)
 
         narrative = self._narrative(features, top_positive_factors, top_negative_factors)
-        confidence = max(0.5, min(0.95, self._completeness(features)))
+
+        # Model confidence: agreement between rule and ML subsystems
+        rule_score_norm = min(1.0, max(0.0, self._completeness(features)))
+        confidence = max(0.5, min(0.95, rule_score_norm))
 
         return Explanation(
             top_positive_factors=top_positive_factors,
@@ -68,20 +113,47 @@ class CreditExplainer:
         )
 
     @staticmethod
-    def _factor_text(feature: str, contribution: float, *, positive: bool) -> str:
+    def _is_credit_positive(feature: str, shap_value: float) -> bool:
+        """Determine if a SHAP contribution is positive for credit quality."""
+        direction = FEATURE_DIRECTION_MAP.get(feature, "higher_is_better")
+        if direction == "higher_is_worse":
+            # For risk features: positive SHAP = increases risk = bad for credit
+            return shap_value < 0  # negative SHAP on risk feature = reduces risk = good
+        else:
+            # For quality features: positive SHAP = increases quality = good
+            return shap_value > 0
+
+    @staticmethod
+    def _factor_text_directed(feature: str, shap_value: float) -> str:
+        """Generate narrative text using the feature direction map."""
         pretty = feature.replace("_", " ").title()
-        if positive:
-            return f"{pretty} supports credit quality (impact {contribution:+.3f})."
-        return f"{pretty} weakens credit quality (impact {contribution:+.3f})."
+        direction = FEATURE_DIRECTION_MAP.get(feature, "higher_is_better")
+
+        if direction == "higher_is_worse":
+            if shap_value > 0:
+                return f"{pretty} weakens credit quality (impact {shap_value:+.3f})."
+            else:
+                return f"{pretty} reduces risk concern (impact {shap_value:+.3f})."
+        else:
+            if shap_value > 0:
+                return f"{pretty} supports credit quality (impact {shap_value:+.3f})."
+            else:
+                return f"{pretty} constrains credit quality (impact {shap_value:+.3f})."
 
     @staticmethod
     def _narrative(features: Dict[str, float], positives: List[str], negatives: List[str]) -> str:
-        dscr = features.get("dscr", 1.0)
+        dscr = features.get("dscr", 0.0)
         gst_gap = features.get("gstr3b_vs_2a_itc_gap", 0.0)
         capacity = features.get("factory_capacity_utilization", 60.0)
+
+        # Null-guard: never render 0.00 when data exists
+        dscr_text = f"{dscr:.2f}x" if dscr > 0 else "N/A (extraction error)"
+        gst_text = f"{gst_gap:.2f}%" if gst_gap > 0 or not features else "N/A (extraction error)"
+        capacity_text = f"{capacity:.1f}%"
+
         return (
             "The recommendation balances cashflow resilience against detected governance and compliance risks. "
-            f"DSCR is observed at {dscr:.2f}x, GST ITC gap at {gst_gap:.2f}%, and factory utilization at {capacity:.1f}%. "
+            f"DSCR is observed at {dscr_text}, GST ITC gap at {gst_text}, and factory utilization at {capacity_text}. "
             "Positive drivers include: "
             + ("; ".join(positives) if positives else "limited strong positives.")
             + " Key constraints include: "
