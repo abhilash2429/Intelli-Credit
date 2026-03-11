@@ -44,5 +44,8 @@ async def init_db():
             AnalysisRun,
             ResearchFindingRecord,
             DueDiligenceRecord,
+            LoanApplication,
+            DocumentClassification,
+            SwotAnalysis,
         )
         await conn.run_sync(Base.metadata.create_all)

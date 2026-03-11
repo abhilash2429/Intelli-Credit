@@ -16,7 +16,7 @@ Loan limit: MPBF (Maximum Permissible Bank Finance) per RBI Tandon Committee nor
 
 from typing import Dict, Optional, Tuple
 
-from backend.agents.state import RiskCategory
+from backend.schemas.credit import RiskCategory
 
 RULE_WEIGHT = 0.6
 ML_WEIGHT = 0.4

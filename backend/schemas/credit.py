@@ -11,6 +11,14 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
 
+class RiskCategory(str, Enum):
+    """Risk classification categories for credit decisions."""
+    LOW = "LOW"
+    MODERATE = "MODERATE"
+    HIGH = "HIGH"
+    CRITICAL = "CRITICAL"
+
+
 class DocumentType(str, Enum):
     ANNUAL_REPORT = "ANNUAL_REPORT"
     SANCTION_LETTER = "SANCTION_LETTER"
@@ -285,6 +293,10 @@ class CompanyCreateInput(BaseModel):
     loan_amount_requested: float = 0.0
     loan_tenor_months: int = 36
     loan_purpose: str = "working_capital"
+    pan_number: Optional[str] = None
+    annual_turnover_cr: Optional[float] = None
+    year_of_incorporation: Optional[int] = None
+    registered_address: Optional[str] = None
 
 
 class CompanySummary(BaseModel):

@@ -6,7 +6,7 @@ cam_outputs, qualitative_inputs, chat_history.
 
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, Float, Integer, Text, DateTime, Boolean, ForeignKey
+from sqlalchemy import Column, String, Float, Integer, Text, DateTime, Boolean, ForeignKey, func
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from backend.database import Base
@@ -21,6 +21,11 @@ class Company(Base):
     cin = Column(String(21), nullable=True)
     gstin = Column(String(15), nullable=True)
     sector = Column(String(100), nullable=True)
+    pan_number = Column(String(10), nullable=True)
+    annual_turnover_cr = Column(Float, nullable=True)
+    employee_count = Column(Integer, nullable=True)
+    year_of_incorporation = Column(Integer, nullable=True)
+    registered_address = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     documents = relationship("Document", back_populates="company")
@@ -31,6 +36,7 @@ class Company(Base):
     analysis_runs = relationship("AnalysisRun", back_populates="company")
     research_findings = relationship("ResearchFindingRecord", back_populates="company")
     due_diligence_entries = relationship("DueDiligenceRecord", back_populates="company")
+    loan_applications = relationship("LoanApplication", back_populates="company", lazy="selectin")
 
 
 class Document(Base):
@@ -165,3 +171,61 @@ class DueDiligenceRecord(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     company = relationship("Company", back_populates="due_diligence_entries")
+
+
+class LoanApplication(Base):
+    """Loan application details for entity onboarding."""
+    __tablename__ = "loan_applications"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    company_id = Column(UUID(as_uuid=True), ForeignKey("companies.id", ondelete="CASCADE"), nullable=False, index=True)
+    loan_type = Column(String(50), nullable=False)
+    loan_amount_cr = Column(Float, nullable=False)
+    tenure_months = Column(Integer, nullable=False)
+    proposed_rate_pct = Column(Float, nullable=True)
+    repayment_mode = Column(String(30), nullable=True)
+    purpose = Column(Text, nullable=True)
+    collateral_type = Column(String(50), nullable=True)
+    collateral_value_cr = Column(Float, nullable=True)
+    status = Column(String(20), default="PENDING", index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    company = relationship("Company", back_populates="loan_applications")
+
+
+class DocumentClassification(Base):
+    """Auto-classification + HITL review of uploaded documents."""
+    __tablename__ = "document_classifications"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    document_id = Column(UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)
+    company_id = Column(UUID(as_uuid=True), ForeignKey("companies.id", ondelete="CASCADE"), nullable=False, index=True)
+    auto_type = Column(String(50), nullable=False)
+    auto_confidence = Column(Float, nullable=False, default=0.5)
+    auto_reasoning = Column(Text, nullable=True)
+    human_approved = Column(Boolean, nullable=True)
+    human_type_override = Column(String(50), nullable=True)
+    human_notes = Column(Text, nullable=True)
+    reviewed_at = Column(DateTime(timezone=True), nullable=True)
+    custom_schema = Column(JSONB, nullable=True)
+    extracted_data = Column(JSONB, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class SwotAnalysis(Base):
+    """SWOT analysis generated during pipeline execution."""
+    __tablename__ = "swot_analyses"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    company_id = Column(UUID(as_uuid=True), ForeignKey("companies.id", ondelete="CASCADE"), nullable=False, index=True)
+    run_id = Column(UUID(as_uuid=True), ForeignKey("analysis_runs.id"), nullable=True)
+    strengths = Column(JSONB, nullable=True)
+    weaknesses = Column(JSONB, nullable=True)
+    opportunities = Column(JSONB, nullable=True)
+    threats = Column(JSONB, nullable=True)
+    sector_outlook = Column(Text, nullable=True)
+    macro_signals = Column(JSONB, nullable=True)
+    investment_thesis = Column(Text, nullable=True)
+    recommendation = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
