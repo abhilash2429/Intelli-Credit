@@ -26,6 +26,10 @@ from backend.core.ingestion.xlsx_financial_parser import (
 from backend.core.ml.credit_scorer import CreditScoringModel
 from backend.core.ml.explainer import CreditExplainer
 from backend.core.ml.feature_engineering import build_feature_vector
+from backend.core.ingestion.alm_parser import parse_alm_statement
+from backend.core.ingestion.borrowing_profile_parser import parse_borrowing_profile
+from backend.core.ingestion.portfolio_parser import parse_portfolio_performance
+from backend.core.ingestion.shareholding_parser import parse_shareholding_pattern
 from backend.core.report.cam_generator import CAMGenerator
 from backend.core.report.five_c_analyzer import analyze_five_cs
 from backend.core.research.cibil_mock import get_mock_cibil_score
@@ -37,9 +41,12 @@ from backend.models.db_models import (
     CamOutput,
     Company,
     Document,
+    DocumentClassification,
     DueDiligenceRecord,
+    LoanApplication,
     ResearchFindingRecord,
     RiskScore,
+    SwotAnalysis,
 )
 from backend.schemas.credit import DueDiligenceInsight, Severity
 
@@ -160,7 +167,7 @@ class IntelliCreditPipeline:
             progress_pct=15,
             message="Extracting structured content from uploaded documents",
         )
-        parsed_financials = await self._parse_documents(documents)
+        parsed_financials = await self._parse_documents(db, company_id, documents)
 
         await update_run(
             db,
@@ -227,6 +234,50 @@ class IntelliCreditPipeline:
             cam_narrative=research_narrative,
         )
 
+        # ── SWOT Generation ──────────────────────────────────────────
+        await update_run(
+            db,
+            run,
+            step="SWOT_ANALYSIS",
+            progress_pct=65,
+            message="Generating SWOT analysis from financials and research",
+        )
+        loan_result = await db.execute(
+            select(LoanApplication)
+            .where(LoanApplication.company_id == uuid.UUID(company_id))
+            .order_by(LoanApplication.created_at.desc())
+            .limit(1)
+        )
+        loan_app = loan_result.scalar_one_or_none()
+        try:
+            from backend.core.research.swot_engine import generate_swot
+
+            swot_result = await generate_swot(
+                company_name=company.name,
+                sector=company.sector or "other",
+                loan_amount_cr=float(loan_app.loan_amount_cr if loan_app else 30.0),
+                loan_type=loan_app.loan_type if loan_app else "term_loan",
+                tenure_months=int(loan_app.tenure_months if loan_app else 36),
+                extracted_financials=parsed_financials.get("financials", {}),
+                research_findings=research_bundle.findings,
+            )
+            swot_record = SwotAnalysis(
+                company_id=uuid.UUID(company_id),
+                strengths=swot_result.get("strengths", []),
+                weaknesses=swot_result.get("weaknesses", []),
+                opportunities=swot_result.get("opportunities", []),
+                threats=swot_result.get("threats", []),
+                sector_outlook=swot_result.get("sector_outlook"),
+                macro_signals=swot_result.get("macro_signals", {}),
+                investment_thesis=swot_result.get("investment_thesis"),
+                recommendation=swot_result.get("recommendation"),
+            )
+            db.add(swot_record)
+            await db.flush()
+            logger.info("pipeline.swot_generated", company=company.name)
+        except Exception as exc:
+            logger.warning("pipeline.swot_generation_failed", error=str(exc))
+
         await update_run(
             db,
             run,
@@ -263,6 +314,9 @@ class IntelliCreditPipeline:
                 "sector": company.sector or "other",
                 "shareholding": shareholding_data,
                 "gst_xlsx": gst_xlsx_data,
+                "alm": parsed_financials.get("alm_data", {}),
+                "borrowing": parsed_financials.get("borrowing_data", {}),
+                "portfolio": parsed_financials.get("portfolio_data", {}),
             }
         )
 
@@ -433,7 +487,7 @@ class IntelliCreditPipeline:
             sink.write_research_findings(
                 company_id=company_id,
                 findings=findings,
-                firecrawl_job_id=research_job_id,
+                research_job_id=research_job_id,
             )
             sink.write_research_narrative(
                 company_id=company_id,
@@ -449,7 +503,9 @@ class IntelliCreditPipeline:
         except Exception as exc:
             logger.warning("pipeline.delta_research_persist_failed", error=str(exc))
 
-    async def _parse_documents(self, documents: List[Document]) -> Dict[str, Any]:
+    async def _parse_documents(
+        self, db: AsyncSession, company_id: str, documents: List[Document]
+    ) -> Dict[str, Any]:
         financial_docs = []
         gstr3b = None
         gstr2a = None
@@ -461,12 +517,64 @@ class IntelliCreditPipeline:
         xlsx_financials: Dict[str, Any] = {}
         gst_xlsx_data: Dict[str, Any] = {}
         shareholding_data: Dict[str, Any] = {}
+        alm_data: Dict[str, Any] = {}
+        borrowing_data: Dict[str, Any] = {}
+        portfolio_data: Dict[str, Any] = {}
+
+        # Load document classifications for type-specific parsing
+        clf_result = await db.execute(
+            select(DocumentClassification).where(
+                DocumentClassification.company_id == uuid.UUID(company_id)
+            )
+        )
+        classifications = {
+            str(c.document_id): c for c in clf_result.scalars().all()
+        }
 
         for doc in documents:
             path = doc.file_path
             if not path:
                 continue
             low = path.lower()
+
+            # Check if doc has a classification override for type-specific parsing
+            clf = classifications.get(str(doc.id))
+            doc_type = None
+            if clf:
+                doc_type = (clf.human_type_override or clf.auto_type or "").upper()
+
+            # Route type-specific classified docs to specialized parsers
+            if doc_type in ("ALM_STATEMENT", "ALM"):
+                try:
+                    alm_data = await parse_alm_statement(path)
+                    logger.info("pipeline.alm_parsed", gap=alm_data.get("structural_liquidity_gap_cr"))
+                except Exception as exc:
+                    logger.warning("pipeline.alm_parse_failed", error=str(exc))
+                continue
+            elif doc_type in ("SHAREHOLDING", "SHAREHOLDING_PATTERN"):
+                try:
+                    sh_data = await parse_shareholding_pattern(path)
+                    shareholding_data.update(sh_data)
+                    logger.info("pipeline.shareholding_parsed", promoter=shareholding_data.get("promoter_holding_pct"))
+                except Exception as exc:
+                    logger.warning("pipeline.shareholding_parse_failed", error=str(exc))
+                continue
+            elif doc_type in ("BORROWING_PROFILE", "BORROWING"):
+                try:
+                    borrowing_data = await parse_borrowing_profile(path)
+                    logger.info("pipeline.borrowing_parsed", debt=borrowing_data.get("total_outstanding_cr"))
+                except Exception as exc:
+                    logger.warning("pipeline.borrowing_parse_failed", error=str(exc))
+                continue
+            elif doc_type in ("PORTFOLIO", "PORTFOLIO_QUALITY"):
+                try:
+                    portfolio_data = await parse_portfolio_performance(path)
+                    logger.info("pipeline.portfolio_parsed", gnpa=portfolio_data.get("gnpa_pct"))
+                except Exception as exc:
+                    logger.warning("pipeline.portfolio_parse_failed", error=str(exc))
+                continue
+
+            # Standard file-type routing (unchanged)
             if (
                 low.endswith(".pdf")
                 or low.endswith(".docx")
@@ -534,6 +642,9 @@ class IntelliCreditPipeline:
             "collateral": collateral,
             "gst_xlsx_data": gst_xlsx_data,
             "shareholding_data": shareholding_data,
+            "alm_data": alm_data,
+            "borrowing_data": borrowing_data,
+            "portfolio_data": portfolio_data,
         }
 
     def _build_gst_payload(self, parsed: Dict[str, Any]) -> Dict[str, Any]:

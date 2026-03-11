@@ -135,5 +135,25 @@ def build_feature_vector(payload: Dict[str, Any]) -> Dict[str, float]:
     # Sector multiplier penalizes riskier sectors in capacity and leverage-sensitive features.
     vector["debt_equity_ratio"] *= sector_multiplier
     vector["dscr"] /= max(sector_multiplier, 0.8)
+
+    # ── New doc-type features (ALM, shareholding, borrowing, portfolio) ──
+    alm = payload.get("alm", {})
+    borrowing = payload.get("borrowing", {})
+    portfolio = payload.get("portfolio", {})
+    sh = payload.get("shareholding", {})
+
+    vector["alm_liquidity_gap_cr"] = _safe_num(alm.get("structural_liquidity_gap_cr"), 0.0)
+    vector["alm_short_term_borrow_pct"] = _safe_num(alm.get("short_term_borrowing_pct"), 0.0)
+    vector["promoter_holding_pct"] = _safe_num(
+        sh.get("promoter_holding_pct", sh.get("promoter_group_pct")), 50.0
+    )
+    vector["pledged_pct"] = _safe_num(
+        sh.get("total_pledged_pct", sh.get("promoter_pledge_pct")), 0.0
+    )
+    vector["existing_debt_cr"] = _safe_num(borrowing.get("total_outstanding_cr"), 0.0)
+    vector["avg_cost_of_debt_pct"] = _safe_num(borrowing.get("weighted_avg_cost_pct"), 0.0)
+    vector["gnpa_pct"] = _safe_num(portfolio.get("gnpa_pct"), 0.0)
+    vector["collection_efficiency"] = _safe_num(portfolio.get("collection_efficiency_pct"), 90.0)
+
     return vector
 
