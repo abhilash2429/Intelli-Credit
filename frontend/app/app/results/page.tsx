@@ -16,6 +16,8 @@ import {
   getResearchV1,
   getResultsV1,
   getReportUrlV1,
+  getSwotV1,
+  getInvestmentReportUrl,
 } from '@/lib/api';
 import { useAnalysisStore } from '@/store/analysisStore';
 import FiveCsRadar from '@/components/FiveCsRadar';
@@ -24,6 +26,7 @@ import ResearchFeed from '@/components/ResearchFeed';
 import ShapChart from '@/components/ShapChart';
 import AnomalyFlags from '@/components/AnomalyFlags';
 import StressTestPanel from '@/components/StressTestPanel';
+import SwotMatrix from '@/components/SwotMatrix';
 import FraudGraph from '@/components/FraudGraph';
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -32,6 +35,7 @@ export default function ResultsPage() {
   const [result, setResult] = useState<any>(null);
   const [explain, setExplain] = useState<any>(null);
   const [research, setResearch] = useState<any[]>([]);
+  const [swot, setSwot] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [statusMessage, setStatusMessage] = useState('Loading analysis results...');
   const { companyId, uploadedFileNames, setResult: storeResult } = useAnalysisStore();
@@ -72,6 +76,14 @@ export default function ResultsPage() {
         if (!cancelled) {
           setExplain(explainRes?.data || null);
           setResearch(researchRes?.data || []);
+        }
+
+        // Fetch SWOT
+        try {
+          const swotRes = await getSwotV1(companyId);
+          if (!cancelled) setSwot(swotRes.data);
+        } catch {
+          // SWOT may not exist yet
         }
       } catch (err) {
         console.error(err);
@@ -164,78 +176,86 @@ export default function ResultsPage() {
 
   if (loading) {
     return (
-      <div className="bg-ic-page py-10 px-8 min-h-[calc(100vh-56px)]">
-        <p className="text-ic-muted animate-pulse">{statusMessage}</p>
+      <div className="bg-ob-bg py-10 px-8 min-h-[calc(100vh-56px)]">
+        <p className="text-ob-muted animate-pulse">{statusMessage}</p>
       </div>
     );
   }
 
   if (!result || !decision?.credit_score) {
     return (
-      <div className="bg-ic-page py-10 px-8 min-h-[calc(100vh-56px)]">
-        <p className="text-ic-muted">{statusMessage || 'Results are being prepared. Please keep this page open.'}</p>
+      <div className="bg-ob-bg py-10 px-8 min-h-[calc(100vh-56px)]">
+        <p className="text-ob-muted">{statusMessage || 'Results are being prepared. Please keep this page open.'}</p>
       </div>
     );
   }
 
   const chartTooltipStyle = {
-    backgroundColor: 'var(--ic-surface)',
-    border: '1px solid var(--ic-border)',
-    color: 'var(--ic-text)',
+    backgroundColor: 'var(--ob-surface)',
+    border: '1px solid var(--ob-edge)',
+    color: 'var(--ob-text)',
     borderRadius: '8px',
   };
 
   return (
-    <div className="bg-ic-page py-10 px-4 md:px-8">
+    <div className="bg-ob-bg py-10 px-4 md:px-8">
       <div className="max-w-[1200px] mx-auto">
         {/* CSS Grid layout */}
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
           {/* Score summary — spans 2 cols */}
-          <div className="xl:col-span-2 bg-ic-surface border border-ic-border rounded-[10px] p-5">
-            <p className="text-[10px] font-medium tracking-[0.12em] uppercase text-ic-muted mb-2.5">Analysis Results</p>
+          <div className="xl:col-span-2 bg-ob-glass border border-ob-edge rounded-[12px] p-[20px] backdrop-blur-[28px]">
+            <p className="font-mono text-[9px] font-normal tracking-[0.14em] uppercase text-ob-dim mb-2.5">Analysis Results</p>
             <div className="flex flex-wrap gap-4 items-baseline">
-              <span className="font-display text-[32px] text-ic-text">{score.toFixed(0)}</span>
-              <span className="text-ic-muted text-[14px]">/ 900</span>
-              <span className="font-mono text-[13px] bg-ic-accent-light text-ic-accent px-2 py-0.5 rounded">{decision.risk_grade}</span>
-              <span className="font-mono text-[13px] bg-ic-accent-light text-ic-positive px-2 py-0.5 rounded">{decision.recommendation}</span>
+              <span className="font-display text-[32px] text-ob-text">{score.toFixed(0)}</span>
+              <span className="text-ob-muted text-[14px]">/ 900</span>
+              <span className="font-mono text-[13px] bg-ob-glass2 text-ob-text px-2 py-0.5 rounded">{decision.risk_grade}</span>
+              <span className="font-mono text-[13px] bg-ob-glass2 text-ob-ok px-2 py-0.5 rounded">{decision.recommendation}</span>
             </div>
-            <p className="text-ic-muted text-[13px] mt-2">
+            <p className="text-ob-muted text-[13px] mt-2">
               {decision.recommendation === 'REJECT' ? (
                 <>
-                  Recommended: <span className="font-mono text-ic-negative">Not Sanctioned (Requested: ₹{Number(decision.recommended_loan_amount || 0).toFixed(2)} Cr)</span>
-                  {' · '}Interest: <span className="font-mono text-ic-muted">N/A</span>
+                  Recommended: <span className="font-mono text-ob-warn">Not Sanctioned (Requested: ₹{Number(decision.recommended_loan_amount || 0).toFixed(2)} Cr)</span>
+                  {' · '}Interest: <span className="font-mono text-ob-muted">N/A</span>
                 </>
               ) : (
                 <>
-                  Recommended: <span className="font-mono text-ic-text">₹{Number(decision.recommended_loan_amount || 0).toFixed(2)} Cr</span>
-                  {' · '}Interest: <span className="font-mono text-ic-text">{Number(decision.recommended_interest_rate || 0).toFixed(2)}%</span>
+                  Recommended: <span className="font-mono text-ob-text">₹{Number(decision.recommended_loan_amount || 0).toFixed(2)} Cr</span>
+                  {' · '}Interest: <span className="font-mono text-ob-text">{Number(decision.recommended_interest_rate || 0).toFixed(2)}%</span>
                 </>
               )}
             </p>
             <div className="flex flex-wrap gap-4 mt-2 text-[12px]">
-              <span className="text-ic-muted">
-                Model Confidence: <span className="font-mono font-medium text-ic-text">
+              <span className="text-ob-muted">
+                Model Confidence: <span className="font-mono font-medium text-ob-text">
                   {result?.model_confidence || 'N/A'}
                 </span>
               </span>
-              <span className="text-ic-muted">
-                Human input: <span className={`font-mono font-medium ${humanImpactPoints >= 0 ? 'text-ic-positive' : 'text-ic-negative'}`}>
+              <span className="text-ob-muted">
+                Human input: <span className={`font-mono font-medium ${humanImpactPoints >= 0 ? 'text-ob-ok' : 'text-ob-warn'}`}>
                   {humanImpactPoints >= 0 ? '+' : ''}{humanImpactPoints.toFixed(1)} pts
                 </span>
               </span>
-              <span className="text-ic-muted">
-                Borrower input: <span className={`font-medium ${hasBorrowerInput ? 'text-ic-positive' : 'text-ic-warning'}`}>
+              <span className="text-ob-muted">
+                Borrower input: <span className={`font-medium ${hasBorrowerInput ? 'text-ob-ok' : 'text-ob-warn'}`}>
                   {hasBorrowerInput ? 'Captured' : 'Not provided'}
                 </span>
               </span>
             </div>
             {result?.cam_docx_path && (
+              <>
               <a
                 href={getReportUrlV1(companyId)}
-                className="inline-block mt-3 px-4 py-2 rounded-[6px] bg-ic-accent text-white text-[12px] font-medium no-underline hover:opacity-90"
+                className="inline-block mt-[12px] px-[24px] py-[10px] rounded-[6px] bg-ob-text text-ob-bg text-[13px] font-body font-bold no-underline hover:bg-ob-cream transition-all"
               >
                 Download CAM (.docx)
               </a>
+              <a
+                href={getInvestmentReportUrl(companyId)}
+                className="inline-block mt-2 ml-2 px-[24px] py-[10px] rounded-[6px] bg-ob-glass2 border border-ob-edge text-ob-text text-[13px] font-body font-bold no-underline hover:bg-ob-glass transition-all"
+              >
+                Investment Report (.docx)
+              </a>
+              </>
             )}
           </div>
 
@@ -248,20 +268,20 @@ export default function ResultsPage() {
           <div className="xl:col-span-2 space-y-5">
             <FiveCsRadar company={fiveC} />
 
-            <div className="bg-ic-surface border border-ic-border rounded-[10px] p-5">
-              <p className="text-[10px] font-medium tracking-[0.12em] uppercase text-ic-muted mb-2.5">GST vs Bank Reconciliation</p>
+            <div className="bg-ob-glass border border-ob-edge rounded-[12px] p-[20px] backdrop-blur-[28px]">
+              <p className="font-mono text-[9px] font-normal tracking-[0.14em] uppercase text-ob-dim mb-2.5">GST vs Bank Reconciliation</p>
               <ResponsiveContainer width="100%" height={320}>
                 <BarChart data={gstBankData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--ic-border)" />
-                  <XAxis dataKey="month" tick={{ fill: 'var(--ic-muted)', fontSize: 12, fontFamily: 'DM Mono' }} />
-                  <YAxis tick={{ fill: 'var(--ic-muted)', fontSize: 12, fontFamily: 'DM Mono' }} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--ob-edge)" />
+                  <XAxis dataKey="month" tick={{ fill: 'var(--ob-muted)', fontSize: 12, fontFamily: 'DM Mono' }} />
+                  <YAxis tick={{ fill: 'var(--ob-muted)', fontSize: 12, fontFamily: 'DM Mono' }} />
                   <Tooltip contentStyle={chartTooltipStyle} />
-                  <Bar dataKey="gst" name="GST Reported Revenue" fill="var(--ic-accent)">
-                    {gstBankData.map((item, idx) => (
-                      <Cell key={idx} fill={item.gst - item.bank > 5 ? 'var(--ic-negative)' : 'var(--ic-accent)'} />
+                  <Bar dataKey="gst" name="GST Reported Revenue" fill="var(--ob-text)">
+                    {gstBankData.map((item: { gst: number; bank: number }, idx: number) => (
+                      <Cell key={idx} fill={item.gst - item.bank > 5 ? 'var(--ob-warn)' : 'var(--ob-text)'} />
                     ))}
                   </Bar>
-                  <Bar dataKey="bank" name="Bank Credits Received" fill="var(--ic-tan)" />
+                  <Bar dataKey="bank" name="Bank Credits Received" fill="var(--ob-edge2)" />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -276,34 +296,47 @@ export default function ResultsPage() {
             />
 
             <StressTestPanel baseScore={score} />
+
+            {/* SWOT Analysis */}
+            {swot && (
+              <SwotMatrix
+                strengths={swot.strengths || []}
+                weaknesses={swot.weaknesses || []}
+                opportunities={swot.opportunities || []}
+                threats={swot.threats || []}
+                investmentThesis={swot.investment_thesis}
+                recommendation={swot.recommendation}
+                sectorOutlook={swot.sector_outlook}
+              />
+            )}
           </div>
 
           {/* Right sidebar — sticky */}
           <div className="xl:col-span-1 space-y-5 xl:sticky xl:top-[72px] xl:self-start">
             {/* Human input traceability */}
-            <div className="bg-ic-surface border border-ic-border rounded-[10px] p-5">
-              <p className="text-[10px] font-medium tracking-[0.12em] uppercase text-ic-muted mb-2.5">Human Input Traceability</p>
+            <div className="bg-ob-glass border border-ob-edge rounded-[12px] p-[20px] backdrop-blur-[28px]">
+              <p className="font-mono text-[9px] font-normal tracking-[0.14em] uppercase text-ob-dim mb-2.5">Human Input Traceability</p>
               {hasBorrowerInput ? (
                 <div className="space-y-2 text-[12px]">
-                  <p className="text-ic-muted">Finance officer: <span className="text-ic-text font-medium">{String(borrowerContext.finance_officer_name || 'N/A')}</span></p>
-                  <p className="text-ic-muted">Cooperation: <span className="text-ic-text font-medium">{String(borrowerContext.management_cooperation || 'N/A')}</span></p>
-                  <p className="text-ic-muted">Capacity: <span className="font-mono text-ic-text">{Number(dueDiligence.factory_capacity_utilization || 0).toFixed(0)}%</span></p>
-                  <p className="text-ic-muted">Integrity: <span className="font-mono text-ic-text">{Number(dueDiligence.management_integrity_score || 0).toFixed(1)}/10</span></p>
+                  <p className="text-ob-muted">Finance officer: <span className="text-ob-text font-medium">{String(borrowerContext.finance_officer_name || 'N/A')}</span></p>
+                  <p className="text-ob-muted">Cooperation: <span className="text-ob-text font-medium">{String(borrowerContext.management_cooperation || 'N/A')}</span></p>
+                  <p className="text-ob-muted">Capacity: <span className="font-mono text-ob-text">{Number(dueDiligence.factory_capacity_utilization || 0).toFixed(0)}%</span></p>
+                  <p className="text-ob-muted">Integrity: <span className="font-mono text-ob-text">{Number(dueDiligence.management_integrity_score || 0).toFixed(1)}/10</span></p>
                 </div>
               ) : (
-                <p className="text-ic-muted text-[12px]">No borrower inputs captured.</p>
+                <p className="text-ob-muted text-[12px]">No borrower inputs captured.</p>
               )}
             </div>
 
             {/* Documents card */}
             {uploadedFileNames.length > 0 && (
-              <div className="bg-ic-surface border border-ic-border rounded-[10px] p-5">
-                <p className="text-[10px] font-medium tracking-[0.12em] uppercase text-ic-muted mb-2.5">Documents</p>
+              <div className="bg-ob-glass border border-ob-edge rounded-[12px] p-[20px] backdrop-blur-[28px]">
+                <p className="font-mono text-[9px] font-normal tracking-[0.14em] uppercase text-ob-dim mb-2.5">Documents</p>
                 <div className="space-y-1.5">
                   {uploadedFileNames.map((name, i) => (
                     <div key={i} className="flex items-center gap-2 text-[12px]">
-                      <span className="w-1.5 h-1.5 rounded-full bg-ic-positive flex-shrink-0" />
-                      <span className="font-mono text-ic-text truncate">{name}</span>
+                      <span className="w-1.5 h-1.5 rounded-full bg-ob-ok flex-shrink-0" />
+                      <span className="font-mono text-ob-text truncate">{name}</span>
                     </div>
                   ))}
                 </div>
@@ -331,15 +364,15 @@ export default function ResultsPage() {
               links={result.fraud_graph.links || []}
             />
           ) : (
-            <div className="bg-ic-surface border border-ic-border rounded-[10px] p-5">
-              <p className="text-[10px] font-medium tracking-[0.12em] uppercase text-ic-muted mb-2.5">Fraud Fingerprinting Graph</p>
-              <p className="text-ic-muted text-[13px]">No confirmed fraud network connections detected (requires 2+ corroborating signals).</p>
+            <div className="bg-ob-glass border border-ob-edge rounded-[12px] p-[20px] backdrop-blur-[28px]">
+              <p className="font-mono text-[9px] font-normal tracking-[0.14em] uppercase text-ob-dim mb-2.5">Fraud Fingerprinting Graph</p>
+              <p className="text-ob-muted text-[13px]">No confirmed fraud network connections detected (requires 2+ corroborating signals).</p>
               {result?.fraud_graph?.weak_associations?.length > 0 && (
                 <details className="mt-3">
-                  <summary className="text-[11px] text-ic-muted cursor-pointer">Show weak associations (unverified)</summary>
+                  <summary className="text-[11px] text-ob-muted cursor-pointer">Show weak associations (unverified)</summary>
                   <div className="mt-2 space-y-1">
                     {result.fraud_graph.weak_associations.map((a: any, idx: number) => (
-                      <p key={idx} className="text-[11px] text-ic-muted font-mono">{a.entity} — {a.signal} (LOW confidence)</p>
+                      <p key={idx} className="text-[11px] text-ob-muted font-mono">{a.entity} — {a.signal} (LOW confidence)</p>
                     ))}
                   </div>
                 </details>
