@@ -218,7 +218,7 @@ export interface CompanyCreateInput {
   sector: string;
   loan_amount_requested: number;
   loan_tenor_months: number;
-  loan_purpose: string;
+  loan_purpose?: string;
 }
 
 export interface DueDiligenceV1Input {
@@ -431,6 +431,96 @@ export async function chatWithCamV1(
     { timeout: 90000 }
   );
   return data.data;
+}
+
+// ── Loan Application API ──
+
+export interface LoanCreateInput {
+  company_id: string;
+  loan_type: string;
+  loan_amount_cr: number;
+  tenure_months: number;
+  proposed_rate_pct?: number;
+  repayment_mode?: string;
+  purpose?: string;
+  collateral_type?: string;
+  collateral_value_cr?: number;
+}
+
+export async function createLoanApplication(
+  payload: LoanCreateInput
+): Promise<APIEnvelope<any>> {
+  const { data } = await api.post<APIEnvelope<any>>('/api/v1/loans', payload);
+  return data;
+}
+
+// ── Classification API ──
+
+export interface ClassificationItem {
+  id: string;
+  document_id: string;
+  auto_type: string;
+  auto_confidence: number;
+  auto_reasoning: string;
+  human_approved: boolean | null;
+  human_type_override: string | null;
+  extracted_fields: Record<string, any> | null;
+}
+
+export async function getClassifications(
+  companyId: string
+): Promise<APIEnvelope<ClassificationItem[]>> {
+  const { data } = await api.get<APIEnvelope<ClassificationItem[]>>(
+    `/api/v1/classifications/${companyId}`
+  );
+  return data;
+}
+
+export async function updateClassification(
+  classificationId: string,
+  payload: { human_approved?: boolean; human_type_override?: string }
+): Promise<APIEnvelope<any>> {
+  const { data } = await api.patch<APIEnvelope<any>>(
+    `/api/v1/classifications/${classificationId}`,
+    payload
+  );
+  return data;
+}
+
+export async function extractSchema(
+  classificationId: string,
+  fields: string[]
+): Promise<APIEnvelope<any>> {
+  const { data } = await api.post<APIEnvelope<any>>(
+    `/api/v1/classifications/${classificationId}/extract`,
+    { fields }
+  );
+  return data;
+}
+
+// ── SWOT API ──
+
+export interface SwotData {
+  strengths: Array<{ point: string; evidence: string; source: string }>;
+  weaknesses: Array<{ point: string; evidence: string; source: string }>;
+  opportunities: Array<{ point: string; evidence: string; source: string }>;
+  threats: Array<{ point: string; evidence: string; source: string }>;
+  sector_outlook: string;
+  macro_signals: Record<string, number | null>;
+  investment_thesis: string;
+  recommendation: string;
+  generated_at: string | null;
+}
+
+export async function getSwotV1(companyId: string): Promise<APIEnvelope<SwotData>> {
+  const { data } = await api.get<APIEnvelope<SwotData>>(
+    `/api/v1/companies/${companyId}/swot`
+  );
+  return data;
+}
+
+export function getInvestmentReportUrl(companyId: string): string {
+  return `${getActiveApiBase()}/api/v1/companies/${companyId}/investment-report`;
 }
 
 export async function healthCheck(): Promise<any> {
