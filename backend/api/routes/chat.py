@@ -11,7 +11,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.agents.llm.llm_client import llm_call
+from backend.core.llm.llm_client import llm_call
 from backend.api.deps import RequestContext, get_request_context
 from backend.config import settings
 from backend.database import get_db

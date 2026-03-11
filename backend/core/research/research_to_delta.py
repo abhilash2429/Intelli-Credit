@@ -4,7 +4,7 @@ Generates CAM research narrative from structured findings.
 
 from __future__ import annotations
 
-from backend.agents.llm.llm_client import llm_call
+from backend.core.llm.llm_client import llm_call
 from backend.config import settings
 from backend.core.structured_logging import get_logger
 

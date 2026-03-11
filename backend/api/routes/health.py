@@ -41,8 +41,9 @@ async def health_integrations(
     - live=true: performs lightweight live calls
     """
     report: dict[str, dict] = {
-        "gemini": {"configured": bool(settings.gemini_api_key), "ok": False},
-        "firecrawl": {"configured": bool(settings.firecrawl_api_key), "ok": False},
+        "cerebras": {"configured": bool(settings.cerebras_api_key), "ok": False},
+        "gemini": {"configured": bool(settings.gemini_api_key), "ok": False, "role": "fallback"},
+        "tavily": {"configured": bool(settings.tavily_api_key), "ok": False},
         "qwen_vl": {
             "configured": bool(settings.huggingface_api_token or settings.qwen_vl_api_key),
             "ok": False,
@@ -59,7 +60,7 @@ async def health_integrations(
     if live:
         # Gemini / free-LLM chain check
         try:
-            from backend.agents.llm.llm_client import llm_call
+            from backend.core.llm.llm_client import llm_call
 
             llm_resp = llm_call(
                 "Reply in one full sentence confirming the CAM chat assistant is available.",
@@ -76,15 +77,15 @@ async def health_integrations(
         except Exception as exc:
             report["gemini"]["error"] = str(exc)
 
-        # Firecrawl check
+        # Tavily check
         try:
-            from backend.core.research.firecrawl_client import FirecrawlClient
+            from backend.core.research.tavily_client import TavilyClient
 
-            client = FirecrawlClient()
-            found = client.search("site:example.com", num_results=1, scrape_options={"formats": ["markdown"]})
-            report["firecrawl"].update({"ok": True, "results": len(found)})
+            client = TavilyClient()
+            found = client.search("site:example.com", num_results=1)
+            report["tavily"].update({"ok": True, "results": len(found)})
         except Exception as exc:
-            report["firecrawl"]["error"] = str(exc)
+            report["tavily"]["error"] = str(exc)
 
         # Qwen-VL OCR check
         try:

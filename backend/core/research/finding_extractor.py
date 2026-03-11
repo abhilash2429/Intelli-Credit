@@ -9,7 +9,7 @@ import re
 from datetime import datetime, date
 from typing import Any
 
-from backend.agents.llm.llm_client import llm_call_json
+from backend.core.llm.llm_client import llm_call_json
 from backend.config import settings
 from backend.core.structured_logging import get_logger
 
