@@ -102,8 +102,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include routers
-from backend.routers import ingest, pipeline, qualitative, score, cam, chat
+# Include routers (v1 API only — legacy routes removed)
 from backend.api.routes import health as health_v1
 from backend.api.routes import upload as upload_v1
 from backend.api.routes import analysis as analysis_v1
@@ -111,13 +110,9 @@ from backend.api.routes import due_diligence as dd_v1
 from backend.api.routes import report as report_v1
 from backend.api.routes import research as research_v1
 from backend.api.routes import chat as chat_v1
+from backend.api.routes import loan as loan_v1
+from backend.api.routes import classification as classification_v1
 
-app.include_router(ingest.router, tags=["Ingest"])
-app.include_router(pipeline.router, tags=["Pipeline"])
-app.include_router(qualitative.router, tags=["Qualitative"])
-app.include_router(score.router, tags=["Score"])
-app.include_router(cam.router, tags=["CAM"])
-app.include_router(chat.router, tags=["Chat"])
 app.include_router(health_v1.router)
 app.include_router(upload_v1.router)
 app.include_router(analysis_v1.router)
@@ -125,6 +120,8 @@ app.include_router(dd_v1.router)
 app.include_router(report_v1.router)
 app.include_router(research_v1.router)
 app.include_router(chat_v1.router)
+app.include_router(loan_v1.router)
+app.include_router(classification_v1.router)
 
 
 @app.get("/health")
