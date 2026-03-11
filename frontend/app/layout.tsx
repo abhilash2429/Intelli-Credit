@@ -27,38 +27,29 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <title>IntelliCredit | AI Credit Appraisal</title>
         <meta name="description" content="AI-powered Credit Appraisal Engine for Indian Corporate Lending" />
       </head>
-      <body className="bg-ic-page text-ic-text antialiased">
-        {/* Liquid Glass Navbar — only shown on marketing routes */}
+      <body className="bg-ob-bg text-ob-text antialiased">
         {!isAppRoute && (
           <nav
-            className="fixed top-0 left-0 right-0 z-50 h-[60px] flex items-center px-8 transition-all duration-300"
+            className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-[60px] py-[26px] transition-all duration-300"
             style={{
-              backgroundColor: scrolled ? 'rgba(250, 248, 243, 0.82)' : 'rgba(250, 248, 243, 0.55)',
-              backdropFilter: 'blur(18px) saturate(180%)',
-              WebkitBackdropFilter: 'blur(18px) saturate(180%)',
-              borderBottom: '1px solid rgba(230, 225, 214, 0.5)',
-              boxShadow: '0 1px 0 rgba(44, 74, 46, 0.06), 0 4px 24px rgba(44, 74, 46, 0.04)',
+              backgroundColor: scrolled ? 'var(--ob-bg)' : 'transparent',
+              backdropFilter: scrolled ? 'blur(28px)' : 'none',
+              borderBottom: scrolled ? '1px solid var(--ob-edge)' : '1px solid transparent'
             }}
           >
-            {/* Logo */}
-            <Link href="/" className="flex items-center gap-0.5 shrink-0 no-underline">
-              <span className="font-display text-lg font-normal text-ic-text">Intelli</span>
-              <span className="font-display text-lg italic text-ic-accent">Credit</span>
+            <Link href="/" className="font-display text-[20px] tracking-[0.01em] text-ob-text no-underline">
+              Intelli<em className="not-italic italic opacity-55">Credit</em>
             </Link>
 
-            {/* Centre nav links */}
-            <div className="flex-1 flex items-center justify-center gap-8">
+            <div className="flex gap-[36px]">
               {MARKETING_LINKS.map((link) => {
                 const isActive = pathname === link.href;
                 return (
                   <Link
                     key={link.href}
                     href={link.href}
-                    className={`text-[13px] font-medium no-underline transition-colors ${
-                      isActive
-                        ? 'text-ic-accent underline underline-offset-4 decoration-2 decoration-ic-accent'
-                        : 'text-ic-muted hover:text-ic-accent'
-                    }`}
+                    className={`text-[12px] font-normal tracking-[0.05em] no-underline transition-colors ${isActive ? 'text-ob-text' : 'text-ob-muted hover:text-ob-text'
+                      }`}
                   >
                     {link.label}
                   </Link>
@@ -66,17 +57,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               })}
             </div>
 
-            {/* CTA pill */}
             <Link
               href="/app/start"
-              className="shrink-0 px-5 py-[7px] border border-ic-accent text-ic-accent text-[13px] font-medium rounded-full no-underline transition-all duration-200 hover:bg-ic-accent hover:text-white"
+              className="text-[12px] font-medium tracking-[0.03em] text-ob-text bg-ob-glass border border-ob-edge px-[22px] py-[9px] rounded-full backdrop-blur-[20px] transition-all duration-200 hover:bg-ob-glass2 hover:border-ob-edge2 no-underline"
             >
               Get Started →
             </Link>
           </nav>
         )}
 
-        {/* Page content */}
         <main>{children}</main>
       </body>
     </html>

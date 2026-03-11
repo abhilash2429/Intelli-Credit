@@ -2,101 +2,87 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Manrope:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
 
 :root {
-  --ic-page:          #faf8f3;
-  --ic-surface:       #ffffff;
-  --ic-surface-mid:   #f2efe7;
-  --ic-border:        #e6e1d6;
-  --ic-accent:        #2c4a2e;
-  --ic-accent-light:  #e8f0e9;
-  --ic-tan:           #c8b99a;
-  --ic-text:          #1c1c1a;
-  --ic-muted:         #7a7568;
-  --ic-positive:      #2c6e49;
-  --ic-warning:       #b5541b;
-  --ic-negative:      #8b1a1a;
+  --ob-bg: #030303;
+  --ob-surface: #0a0a0a;
+  --ob-surface2: #111111;
+  --ob-glass: rgba(255, 255, 255, 0.07);
+  --ob-glass2: rgba(255, 255, 255, 0.03);
+  --ob-edge: rgba(255, 255, 255, 0.15);
+  --ob-edge2: rgba(255, 255, 255, 0.2);
+  --ob-text: #ffffff;
+  --ob-muted: rgba(255, 255, 255, 0.55);
+  --ob-dim: rgba(255, 255, 255, 0.25);
+  --ob-cream: #ffffff;
+  --ob-warn: rgba(255, 180, 80, 0.85);
+  --ob-warn-bg: rgba(255, 180, 80, 0.07);
+  --ob-warn-edge: rgba(255, 180, 80, 0.15);
+  --ob-ok: rgba(160, 220, 180, 0.75);
+  --ob-ok-bg: rgba(160, 220, 180, 0.06);
+  --ob-ok-edge: rgba(160, 220, 180, 0.12);
+  --font-display: '' DM Serif Display'', serif;
+  --font-body: '' Manrope'', sans-serif;
+  --font-mono: '' DM Mono'', monospace;
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 14px;
+  --r-xl: 20px;
+  --r-pill: 9999px;
 }
 
-html,
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
 body {
-  min-height: 100%;
-  background-color: var(--ic-page);
-  color: var(--ic-text);
+  background: var(--ob-bg);
+  color: var(--ob-text);
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
 }
 
-body {
-  font-family: 'DM Sans', sans-serif;
-  letter-spacing: 0.01em;
+body::before {
+  content: '' '';
+  position: fixed;
+  top: -120px;
+  left: 50%;
+  width: 900px;
+  height: 400px;
+  transform: translateX(-50%);
+  background: radial-gradient(ellipse, rgba(255, 250, 235, 0.1) 0%, transparent 65%);
+  pointer-events: none;
+  z-index: 0;
 }
 
-.font-display {
-  font-family: 'Playfair Display', serif;
-}
-
-.font-mono {
-  font-family: 'DM Mono', monospace;
-}
-
-::selection {
-  background: var(--ic-accent);
-  color: #ffffff;
-}
-
-input,
-textarea,
-select {
-  background-color: var(--ic-surface);
-  border: 1px solid var(--ic-border);
-  color: var(--ic-text);
-}
-
-input::placeholder,
-textarea::placeholder {
-  color: var(--ic-muted);
-}
-
-input:focus,
-textarea:focus,
-select:focus {
-  outline: none;
-  box-shadow: 0 0 0 2px rgba(44, 74, 46, 0.4);
-}
-
-input[type="range"] {
-  accent-color: var(--ic-accent);
-}
-
-a {
-  color: var(--ic-accent);
-}
-
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: var(--ic-surface-mid);
-}
-
-::-webkit-scrollbar-thumb {
-  background: var(--ic-tan);
-  border-radius: 8px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: var(--ic-muted);
+body::after {
+  content: '' '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns=''http://www.w3.org/2000/svg''%3E%3Cfilter id=''g''%3E%3CfeTurbulence type=''fractalNoise'' baseFrequency=''0.65'' numOctaves=''3'' stitchTiles=''stitch''/%3E%3C/filter%3E%3Crect width=''100%25'' height=''100%25'' filter=''url(%23g)'' opacity=''1''/%3E%3C/svg%3E");
+  background-size: 200px;
+  opacity: 0.05;
+  pointer-events: none;
+  z-index: 0;
 }
 
 @media print {
+
   nav,
   button,
   .no-print {
     display: none !important;
   }
-  body {
-    background: white;
+
+  body,
+  main {
+    background: #fff !important;
+    color: #000 !important;
   }
 }

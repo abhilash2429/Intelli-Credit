@@ -8,7 +8,7 @@ interface CamPreviewProps {
 
 export default function CamPreview({ camText }: CamPreviewProps) {
   return (
-    <div className="prose max-w-none prose-headings:font-display prose-headings:text-ic-accent prose-h1:text-[22px] prose-h2:text-[16px] prose-p:text-ic-text prose-p:text-[14px] prose-p:leading-[1.75] prose-li:text-ic-text prose-li:text-[14px] prose-strong:text-ic-text prose-a:text-ic-accent prose-a:no-underline hover:prose-a:underline prose-table:border-ic-border prose-th:bg-ic-surface-mid prose-th:text-ic-text prose-td:border-ic-border prose-td:font-mono prose-td:text-[13px]">
+    <div className="prose max-w-none prose-headings:font-display prose-headings:text-ob-text prose-h1:text-[22px] prose-h2:text-[16px] prose-p:text-ob-text prose-p:text-[14px] prose-p:leading-[1.75] prose-li:text-ob-text prose-li:text-[14px] prose-strong:text-ob-text prose-a:text-ob-text prose-a:no-underline hover:prose-a:underline prose-table:border-ob-edge prose-th:bg-ob-glass2 prose-th:text-ob-text prose-td:border-ob-edge prose-td:font-mono prose-td:text-[13px]">
       <ReactMarkdown>{camText}</ReactMarkdown>
     </div>
   );

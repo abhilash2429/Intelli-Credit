@@ -1,0 +1,79 @@
+
+> intelli-credit-frontend@1.0.0 build
+> next build
+
+  Γû▓ Next.js 14.2.35
+
+   Creating an optimized production build ...
+ Γ£ô Compiled successfully
+   Linting and checking validity of types ...
+
+Failed to compile.
+
+./app/app/explain/page.tsx
+18:42  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+
+./app/app/notes/page.tsx
+3:21  Error: 'useMemo' is defined but never used.  @typescript-eslint/no-unused-vars
+29:42  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+67:19  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+
+./app/app/results/page.tsx
+32:40  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+33:42  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+34:44  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+50:27  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+138:34  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+314:59  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+341:67  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+
+./app/app/upload/page.tsx
+43:62  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+46:48  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+72:19  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+116:6  Warning: React Hook useEffect has a missing dependency: 'buildDueDiligenceNotes'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+169:19  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+304:93  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+
+./components/ChatInterface.tsx
+61:19  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+
+./components/FraudGraph.tsx
+34:33  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+35:44  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+35:56  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+59:17  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+59:22  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+89:25  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+90:25  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+91:25  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+92:25  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+94:27  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+94:55  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+95:26  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+95:58  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+
+./lib/api.ts
+85:34  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+199:18  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+349:24  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+350:47  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+357:24  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+360:47  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+368:81  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+369:47  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+382:24  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+383:47  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+393:24  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+394:47  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+401:76  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+402:46  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+406:76  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+407:46  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+411:77  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+412:46  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+436:46  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+441:54  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+469:24  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+
+info  - Need to disable some ESLint rules? Learn more here: https://nextjs.org/docs/basic-features/eslint#disabling-rules

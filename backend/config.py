@@ -27,11 +27,11 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     gemini_api_key: str = ""
     gemini_model: str = "gemini-1.5-flash"
-    firecrawl_api_key: str = ""
+
     huggingface_api_token: str = ""
     huggingface_base_url: str = "https://router.huggingface.co/v1"
     hf_free_llm_model: str = "Qwen/Qwen2.5-7B-Instruct"
-    llm_provider: str = "huggingface"   # huggingface | mock | openai | anthropic
+    llm_provider: str = "cerebras"   # cerebras | huggingface | mock | openai | anthropic
     grok_api_key: str = ""
     sarvam_api_key: str = ""
     qwen_vl_api_key: str = ""
@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     # Web Research
     serper_api_key: str = ""
     tavily_api_key: str = ""
-    max_firecrawl_pages_per_search: int = 10
+    max_tavily_results_per_search: int = 10
     max_research_sources_per_company: int = 50
     research_depth: str = "deep"  # shallow | medium | deep
 

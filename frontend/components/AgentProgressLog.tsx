@@ -114,21 +114,21 @@ export default function AgentProgressLog({
   }, [logs]);
 
   const getLogColor = (message: string) => {
-    if (message.includes('ERROR')) return 'text-ic-negative';
-    if (message.includes('✅') || message.includes('Complete')) return 'text-ic-positive';
-    if (message.includes('HITL')) return 'text-ic-warning';
-    return 'text-ic-text';
+    if (message.includes('ERROR')) return 'text-ob-warn';
+    if (message.includes('✅') || message.includes('Complete')) return 'text-ob-ok';
+    if (message.includes('HITL')) return 'text-ob-warn';
+    return 'text-ob-text';
   };
 
   return (
     <div>
       {/* HITL Banner */}
       {isHitl && !isComplete && (
-        <div className="mb-4 p-4 bg-[#fdf0e8] border border-[#f3d5bc] rounded-[10px]">
-          <p className="text-ic-warning font-medium text-[14px]">
+        <div className="mb-4 p-4 bg-ob-warn-bg border border-ob-warn-edge rounded-[12px]">
+          <p className="text-ob-warn font-medium text-[14px]">
             Human-in-the-Loop — Awaiting Qualitative Input
           </p>
-          <p className="text-ic-muted text-[12px] mt-1">
+          <p className="text-ob-muted text-[12px] mt-1">
             Enter your site visit notes and management assessment to continue.
           </p>
         </div>
@@ -136,8 +136,8 @@ export default function AgentProgressLog({
 
       {/* Completion Banner */}
       {isComplete && (
-        <div className="mb-4 p-4 bg-ic-accent-light border border-[#b8d9bf] rounded-[10px]">
-          <p className="text-ic-positive font-medium text-[14px]">
+        <div className="mb-4 p-4 bg-ob-glass2 border border-ob-ok-edge rounded-[12px]">
+          <p className="text-ob-ok font-medium text-[14px]">
             Pipeline Complete — Credit Appraisal Ready
           </p>
         </div>
@@ -145,26 +145,26 @@ export default function AgentProgressLog({
 
       {/* Progress bar */}
       <div className="mb-3">
-        <div className="flex justify-between text-[11px] text-ic-muted mb-1">
+        <div className="flex justify-between text-[11px] text-ob-muted mb-1">
           <span>{currentStep}</span>
           <span className="font-mono">{progress.toFixed(0)}%</span>
         </div>
-        <div className="h-1.5 bg-ic-surface-mid rounded-full overflow-hidden">
+        <div className="h-1.5 bg-ob-glass2 rounded-full overflow-hidden">
           <div
-            className="h-full bg-ic-accent transition-all duration-500 rounded-full"
+            className="h-full bg-ob-text transition-all duration-500 rounded-full"
             style={{ width: `${progress}%` }}
           />
         </div>
       </div>
 
       {/* Log Lines */}
-      <div className="bg-ic-surface-mid rounded-[10px] border border-ic-border p-4 max-h-96 overflow-y-auto font-mono text-[12px]">
+      <div className="bg-ob-glass2 rounded-[12px] border border-ob-edge p-4 max-h-96 overflow-y-auto font-mono text-[12px]">
         {logs.length === 0 && (
-          <p className="text-ic-muted animate-pulse">Connecting to pipeline...</p>
+          <p className="text-ob-muted animate-pulse">Connecting to pipeline...</p>
         )}
         {logs.map((log, i) => (
           <div key={i} className="flex gap-3 py-0.5">
-            <span className="text-ic-muted shrink-0">{log.timestamp}</span>
+            <span className="text-ob-muted shrink-0">{log.timestamp}</span>
             <span className={getLogColor(log.message)}>
               {log.step ? `[${STEP_LABELS[String(log.step)] || String(log.step)}] ` : ''}
               {log.message}

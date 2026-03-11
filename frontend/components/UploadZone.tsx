@@ -55,19 +55,19 @@ export default function UploadZone({ onFilesReady }: UploadZoneProps) {
     <div>
       <div
         {...getRootProps()}
-        className={`border-2 border-dashed rounded-[10px] p-10 text-center cursor-pointer transition-all duration-200 ${
+        className={`border-2 border-dashed rounded-[12px] p-10 text-center cursor-pointer transition-all duration-200 ${
           isDragActive
-            ? 'border-ic-accent bg-ic-accent-light'
-            : 'border-ic-border bg-ic-surface-mid hover:border-ic-accent/50'
+            ? 'border-ob-text bg-ob-glass2'
+            : 'border-ob-edge bg-ob-glass2 hover:border-ob-text/50'
         }`}
       >
         <input {...getInputProps()} />
-        <p className="text-ic-text text-[15px]">
+        <p className="text-ob-text text-[15px]">
           {isDragActive
             ? 'Drop files here...'
             : 'Drag & drop files, or click to browse'}
         </p>
-        <p className="text-ic-muted text-[12px] mt-2">
+        <p className="text-ob-muted text-[12px] mt-2">
           PDF, DOCX, CSV, XML, Excel, JPEG, PNG
         </p>
       </div>
@@ -77,22 +77,22 @@ export default function UploadZone({ onFilesReady }: UploadZoneProps) {
           {uploadedFiles.map((uf, i) => (
             <div
               key={i}
-              className="flex items-center justify-between bg-ic-surface-mid rounded-[10px] px-4 py-2.5 border border-ic-border"
+              className="flex items-center justify-between bg-ob-glass2 rounded-[12px] px-4 py-2.5 border border-ob-edge"
             >
               <div className="flex items-center gap-3 min-w-0">
-                <span className="w-1.5 h-1.5 rounded-full bg-ic-positive flex-shrink-0" />
-                <span className="font-mono text-[12px] text-ic-text truncate">
+                <span className="w-1.5 h-1.5 rounded-full bg-ob-ok flex-shrink-0" />
+                <span className="font-mono text-[12px] text-ob-text truncate">
                   {uf.file.name}
                 </span>
                 {uf.type && (
-                  <span className="px-2 py-0.5 text-[10px] rounded bg-ic-accent-light text-ic-accent border border-ic-accent/20 flex-shrink-0">
+                  <span className="px-2 py-0.5 text-[10px] rounded bg-ob-glass2 text-ob-text border border-ob-text/20 flex-shrink-0">
                     {uf.type}
                   </span>
                 )}
               </div>
               <button
                 onClick={() => removeFile(i)}
-                className="text-ic-muted hover:text-ic-negative text-[12px] ml-2 flex-shrink-0"
+                className="text-ob-muted hover:text-ob-warn text-[12px] ml-2 flex-shrink-0"
               >
                 ✕
               </button>

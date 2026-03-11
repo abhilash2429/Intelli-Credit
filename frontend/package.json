@@ -13,6 +13,7 @@
     "axios": "^1.7",
     "d3": "^7.9.0",
     "eventsource-parser": "^2.0",
+    "framer-motion": "^12.35.2",
     "lucide-react": "^0.400",
     "next": "^14.2.35",
     "react": "^18",

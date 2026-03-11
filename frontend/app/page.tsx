@@ -1,210 +1,221 @@
 'use client';
 
 import Link from 'next/link';
-
-/* ── Inline SVG Icons ── */
-const DocIcon = () => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-    <polyline points="14 2 14 8 20 8" />
-    <line x1="16" y1="13" x2="8" y2="13" />
-    <line x1="16" y1="17" x2="8" y2="17" />
-    <polyline points="10 9 9 9 8 9" />
-  </svg>
-);
-
-const SearchIcon = () => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="11" cy="11" r="8" />
-    <line x1="21" y1="21" x2="16.65" y2="16.65" />
-    <circle cx="11" cy="11" r="4" strokeDasharray="2 2" />
-  </svg>
-);
-
-const ChartIcon = () => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-    <line x1="18" y1="20" x2="18" y2="10" />
-    <line x1="12" y1="20" x2="12" y2="4" />
-    <line x1="6" y1="20" x2="6" y2="14" />
-    <path d="M3 21h18" />
-  </svg>
-);
-
-const FEATURES = [
-  {
-    icon: <DocIcon />,
-    title: 'Multi-source ingestion',
-    body: 'Upload PDFs, bank statements, GST returns, ITR files and scanned documents. OCR handles the rest.',
-    tags: 'PDF · DOCX · GST · Bank CSV · ITR · JPEG',
-  },
-  {
-    icon: <SearchIcon />,
-    title: 'Autonomous research agent',
-    body: 'Cross-checks MCA filings, eCourts records, news, and promoter history — without any manual lookup.',
-    tags: 'MCA · eCourts · News · Promoter Intel',
-  },
-  {
-    icon: <ChartIcon />,
-    title: 'Explainable scoring + CAM',
-    body: 'XGBoost ML model with SHAP-style explainability produces a decision, risk premium, and a full Credit Appraisal Memo.',
-    tags: 'Five Cs · SHAP · Word/PDF CAM',
-  },
-];
-
-const STEPS = [
-  { num: '01', title: 'Upload Documents', desc: 'PDF, bank statements, GST, ITR, scanned pages' },
-  { num: '02', title: 'Add Analyst Notes', desc: 'Site visit observations and management assessment' },
-  { num: '03', title: 'Pipeline Runs', desc: 'OCR, research, scoring, CAM — fully automated' },
-  { num: '04', title: 'Review & Export', desc: 'Score dashboard, explainability, downloadable memo' },
-];
-
-const MARQUEE_ITEMS = [
-  'GST Returns', 'Bank Statements', 'ITR', 'Annual Reports', 'OCR Documents', 'Audit Reports',
-  'Balance Sheets', 'GSTR-3B', 'Form 26AS', 'MCA Filings',
-];
+import { useEffect, useState } from 'react';
 
 export default function HeroPage() {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
   return (
-    <div className="bg-ic-page pt-[60px]">
-      {/* ── Hero Section ── */}
-      <section
-        className="min-h-[92vh] flex flex-col items-center justify-center px-6 text-center"
-        style={{
-          background: 'radial-gradient(ellipse 60% 50% at 80% 20%, rgba(44,74,46,0.06) 0%, transparent 70%)',
-        }}
-      >
-        {/* Eyebrow */}
-        <p className="text-[10px] font-medium tracking-[0.16em] uppercase text-ic-accent mb-5">
-          AI-Powered Credit Appraisal
-        </p>
+    <div className="bg-ob-bg min-h-screen pt-[120px] pb-20 flex justify-center">
+      {/* Container */}
+      <div className="relative z-10 flex flex-col lg:flex-row items-start gap-[80px] px-[60px] max-w-[1440px] w-full">
 
-        {/* Headline */}
-        <h1 className="font-display text-[58px] font-semibold text-ic-text leading-[1.1] max-w-[680px]">
-          Assess any borrower.{' '}
-          <br />
-          In <span className="italic text-ic-accent">minutes</span>.
-        </h1>
+        {/* LEFT */}
+        <div className={`flex-1 pt-5 transition-all duration-1000 transform ${mounted ? 'translate-y-0 opacity-100' : 'translate-y-6 opacity-0'}`}>
+          <div className="font-mono text-[10px] text-ob-muted tracking-[0.16em] uppercase mb-8">
+            Corporate credit appraisal · AI-powered · Indian lending
+          </div>
 
-        {/* Subheading */}
-        <p className="text-[16px] text-ic-muted leading-[1.7] max-w-[520px] mt-6">
-          Intelli·Credit combines document intelligence, autonomous web research, and ML-powered scoring
-          to produce a bank-grade Credit Appraisal Memo — automatically.
-        </p>
+          <h1 className="font-display text-[clamp(46px,4.8vw,72px)] font-normal leading-[1.12] tracking-[-0.015em] text-ob-text mb-7">
+            The credit appraisal<br />
+            that writes <em className="italic opacity-60">itself.</em>
+          </h1>
 
-        {/* CTA Row */}
-        <div className="flex items-center gap-5 mt-9">
-          <Link
-            href="/app/start"
-            className="px-7 py-3.5 bg-ic-accent text-white text-[14px] font-medium rounded-[8px] no-underline transition-opacity hover:opacity-90"
-          >
-            Get Started →
-          </Link>
-          <a
-            href="#how-it-works"
-            className="text-ic-accent text-[14px] underline underline-offset-4 decoration-1"
-          >
-            See how it works
-          </a>
-        </div>
+          <div className="w-[40px] h-[1px] bg-ob-edge2 mb-6 opacity-80" />
 
-        {/* Trust chips */}
-        <p className="text-[11px] text-ic-muted mt-6">
-          ✓ No login required · ✓ Indian lending context · ✓ Generates CAM in minutes
-        </p>
-      </section>
-
-      {/* ── Social Proof Strip ── */}
-      <div className="bg-ic-surface-mid border-y border-ic-border py-4 overflow-hidden">
-        <div className="flex animate-marquee whitespace-nowrap">
-          {[...MARQUEE_ITEMS, ...MARQUEE_ITEMS].map((item, i) => (
-            <span key={i} className="font-mono text-[11px] text-ic-muted tracking-[0.06em] mx-4">
-              {item}
-            </span>
-          ))}
-        </div>
-        <style jsx>{`
-          @keyframes marquee {
-            0% { transform: translateX(0); }
-            100% { transform: translateX(-50%); }
-          }
-          .animate-marquee {
-            animation: marquee 30s linear infinite;
-          }
-        `}</style>
-      </div>
-
-      {/* ── Feature Highlights ── */}
-      <section id="how-it-works" className="py-20 px-6">
-        <div className="max-w-[1100px] mx-auto text-center">
-          <h2 className="font-display text-[36px] text-ic-text">From documents to decision</h2>
-          <p className="text-[14px] text-ic-muted max-w-[480px] mx-auto mt-3">
-            Three stages that transform raw financial documents into an actionable credit appraisal.
+          <p className="text-[15px] font-light text-ob-muted leading-[1.85] max-w-[440px] mb-10">
+            Upload a borrower&apos;s documents. Our pipeline ingests, researches, scores, and generates a complete Credit Appraisal Memo — in the time it takes to make a cup of tea. No manual steps. No waiting.
           </p>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mt-12">
-            {FEATURES.map((f) => (
-              <div
-                key={f.title}
-                className="bg-ic-surface border border-ic-border rounded-[12px] p-6 text-left transition-all duration-200 hover:shadow-sm hover:-translate-y-0.5"
-              >
-                <div className="w-10 h-10 bg-ic-accent-light rounded-[8px] flex items-center justify-center text-ic-accent">
-                  {f.icon}
+          <div className="flex gap-[10px] mb-[56px]">
+            <Link
+              href="/app/start"
+              className="bg-ob-text text-ob-bg font-body text-[13px] font-bold px-[32px] py-[13px] border-none rounded-[6px] tracking-[0.04em] transition-all duration-200 hover:bg-ob-cream no-underline"
+            >
+              Begin Assessment
+            </Link>
+            <Link
+              href="#how-it-works"
+              className="bg-transparent text-ob-muted font-body text-[13px] font-normal px-[24px] py-[12px] border border-ob-edge rounded-[6px] transition-all duration-200 hover:border-ob-edge2 hover:text-ob-text no-underline"
+            >
+              How it works →
+            </Link>
+          </div>
+
+          <div className="flex flex-col gap-0 border-y border-ob-edge" id="how-it-works">
+            {/* Step 01 */}
+            <div className="flex gap-[20px] py-[18px] border-b border-ob-edge">
+              <div className="font-mono text-[10px] text-ob-dim pt-[2px] shrink-0 w-[24px]">01</div>
+              <div>
+                <div className="font-display text-[15px] text-ob-text mb-1">Document Ingestion</div>
+                <div className="text-[11px] font-normal text-ob-muted leading-[1.6]">
+                  GST returns, bank statements, ITR, annual reports and scanned PDFs — parsed and cross-validated automatically.
                 </div>
-                <h3 className="font-display text-[18px] text-ic-text mt-4">{f.title}</h3>
-                <p className="text-[13px] text-ic-muted leading-[1.7] mt-2">{f.body}</p>
-                <p className="font-mono text-[10px] text-ic-muted mt-4">{f.tags}</p>
+                <div className="flex flex-wrap gap-1 mt-2">
+                  <span className="font-mono text-[9px] text-ob-dim px-[7px] py-[2px] border border-ob-edge rounded-[3px]">GSTR-3B</span>
+                  <span className="font-mono text-[9px] text-ob-dim px-[7px] py-[2px] border border-ob-edge rounded-[3px]">Bank CSV</span>
+                  <span className="font-mono text-[9px] text-ob-dim px-[7px] py-[2px] border border-ob-edge rounded-[3px]">ITR JSON</span>
+                  <span className="font-mono text-[9px] text-ob-dim px-[7px] py-[2px] border border-ob-edge rounded-[3px]">OCR</span>
+                  <span className="font-mono text-[9px] text-ob-dim px-[7px] py-[2px] border border-ob-edge rounded-[3px]">PDF/DOCX</span>
+                </div>
               </div>
-            ))}
+            </div>
+
+            {/* Step 02 */}
+            <div className="flex gap-[20px] py-[18px] border-b border-ob-edge">
+              <div className="font-mono text-[10px] text-ob-dim pt-[2px] shrink-0 w-[24px]">02</div>
+              <div>
+                <div className="font-display text-[15px] text-ob-text mb-1">Autonomous Web Research</div>
+                <div className="text-[11px] font-normal text-ob-muted leading-[1.6]">
+                  AI agents sweep MCA21, eCourts, news archives and promoter databases without a single manual search.
+                </div>
+                <div className="flex flex-wrap gap-1 mt-2">
+                  <span className="font-mono text-[9px] text-ob-dim px-[7px] py-[2px] border border-ob-edge rounded-[3px]">MCA21</span>
+                  <span className="font-mono text-[9px] text-ob-dim px-[7px] py-[2px] border border-ob-edge rounded-[3px]">eCourts</span>
+                  <span className="font-mono text-[9px] text-ob-dim px-[7px] py-[2px] border border-ob-edge rounded-[3px]">News</span>
+                  <span className="font-mono text-[9px] text-ob-dim px-[7px] py-[2px] border border-ob-edge rounded-[3px]">Promoter Intel</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Step 03 */}
+            <div className="flex gap-[20px] py-[18px] border-b border-ob-edge">
+              <div className="font-mono text-[10px] text-ob-dim pt-[2px] shrink-0 w-[24px]">03</div>
+              <div>
+                <div className="font-display text-[15px] text-ob-text mb-1">Explainable ML Scoring</div>
+                <div className="text-[11px] font-normal text-ob-muted leading-[1.6]">
+                  XGBoost model calibrated to Indian lending data. Every factor explained via SHAP. Hard rejection rules enforced first.
+                </div>
+                <div className="flex flex-wrap gap-1 mt-2">
+                  <span className="font-mono text-[9px] text-ob-dim px-[7px] py-[2px] border border-ob-edge rounded-[3px]">XGBoost</span>
+                  <span className="font-mono text-[9px] text-ob-dim px-[7px] py-[2px] border border-ob-edge rounded-[3px]">SHAP</span>
+                  <span className="font-mono text-[9px] text-ob-dim px-[7px] py-[2px] border border-ob-edge rounded-[3px]">Five Cs</span>
+                  <span className="font-mono text-[9px] text-ob-dim px-[7px] py-[2px] border border-ob-edge rounded-[3px]">Risk Premium</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Step 04 */}
+            <div className="flex gap-[20px] py-[18px]">
+              <div className="font-mono text-[10px] text-ob-dim pt-[2px] shrink-0 w-[24px]">04</div>
+              <div>
+                <div className="font-display text-[15px] text-ob-text mb-1">CAM Output + Export</div>
+                <div className="text-[11px] font-normal text-ob-muted leading-[1.6]">
+                  A 9-section Credit Appraisal Memo formatted to Indian banking standards. Download as Word or PDF instantly.
+                </div>
+                <div className="flex flex-wrap gap-1 mt-2">
+                  <span className="font-mono text-[9px] text-ob-dim px-[7px] py-[2px] border border-ob-edge rounded-[3px]">Word DOCX</span>
+                  <span className="font-mono text-[9px] text-ob-dim px-[7px] py-[2px] border border-ob-edge rounded-[3px]">PDF</span>
+                  <span className="font-mono text-[9px] text-ob-dim px-[7px] py-[2px] border border-ob-edge rounded-[3px]">9 Sections</span>
+                  <span className="font-mono text-[9px] text-ob-dim px-[7px] py-[2px] border border-ob-edge rounded-[3px]">Chat</span>
+                </div>
+              </div>
+            </div>
+
           </div>
         </div>
-      </section>
 
-      {/* ── Pipeline Steps ── */}
-      <section className="py-16 px-6 bg-ic-surface-mid">
-        <div className="max-w-[900px] mx-auto text-center">
-          <h2 className="font-display text-[32px] text-ic-text">How it works</h2>
-          <div className="flex flex-col md:flex-row items-start md:items-center justify-between mt-12 gap-6">
-            {STEPS.map((step, i) => (
-              <div key={step.num} className="flex md:flex-col items-center md:items-center gap-3 md:gap-0 flex-1 text-center">
-                {/* Circle */}
-                <div className="w-10 h-10 rounded-full border-2 border-ic-accent text-ic-accent flex items-center justify-center text-[13px] font-mono font-medium shrink-0">
-                  {step.num}
-                </div>
-                <div className="md:mt-3">
-                  <p className="text-[13px] font-medium text-ic-text">{step.title}</p>
-                  <p className="text-[11px] text-ic-muted mt-1">{step.desc}</p>
-                </div>
-                {/* Connector line (hidden on last, visible on desktop) */}
-                {i < STEPS.length - 1 && (
-                  <div className="hidden md:block absolute" />
-                )}
-              </div>
-            ))}
+        {/* RIGHT — stacked cards */}
+        <div className={`w-full lg:w-[360px] shrink-0 flex flex-col gap-[10px] pt-1 transition-all duration-1000 delay-300 transform ${mounted ? 'translate-y-0 opacity-100' : 'translate-y-6 opacity-0'}`}>
+          {/* Score */}
+          <div className="bg-ob-glass border border-ob-edge rounded-[12px] p-[20px] backdrop-blur-[28px]">
+            <div className="font-mono text-[9px] text-ob-dim tracking-[0.14em] uppercase mb-[14px]">
+              Risk Score · Vardhman Agri Processing
+            </div>
+            <div className="font-display text-[58px] text-ob-text leading-[1] tracking-[-0.03em]">
+              6.4<small className="text-[18px] text-ob-muted font-body font-light"> /10</small>
+            </div>
+            <div className="text-[11px] font-medium text-ob-muted mt-[8px] px-[10px] py-[5px] border border-ob-edge inline-block rounded-[4px] tracking-[0.04em]">
+              Conditional Approval Recommended
+            </div>
           </div>
-          {/* Connector lines between steps on desktop */}
-          <div className="hidden md:flex max-w-[700px] mx-auto mt-[-52px] mb-[40px] items-center px-[60px]">
-            {[0, 1, 2].map((i) => (
-              <div key={i} className="flex-1 h-px bg-ic-border" />
-            ))}
+
+          {/* Metrics */}
+          <div className="bg-ob-glass border border-ob-edge rounded-[12px] p-[20px] backdrop-blur-[28px]">
+            <div className="font-mono text-[9px] text-ob-dim tracking-[0.14em] uppercase mb-[14px]">
+              Financial Snapshot
+            </div>
+            <div className="grid grid-cols-2 gap-[12px]">
+              <div className="p-[12px] bg-ob-glass2 border border-ob-edge rounded-[8px]">
+                <div className="font-mono text-[17px] font-medium text-ob-text">₹4.2Cr</div>
+                <div className="text-[10px] text-ob-muted mt-[3px] font-normal">Revenue TTM</div>
+              </div>
+              <div className="p-[12px] bg-ob-glass2 border border-ob-edge rounded-[8px]">
+                <div className="font-mono text-[17px] font-medium text-ob-text">14.3%</div>
+                <div className="text-[10px] text-ob-muted mt-[3px] font-normal">EBITDA Margin</div>
+              </div>
+              <div className="p-[12px] bg-ob-glass2 border border-ob-edge rounded-[8px]">
+                <div className="font-mono text-[17px] font-medium text-ob-text">1.82×</div>
+                <div className="text-[10px] text-ob-muted mt-[3px] font-normal">Debt / Equity</div>
+              </div>
+              <div className="p-[12px] bg-ob-glass2 border border-ob-edge rounded-[8px]">
+                <div className="font-mono text-[17px] font-medium text-[rgba(255,180,80,0.85)]">0.93×</div>
+                <div className="text-[10px] text-ob-muted mt-[3px] font-normal">DSCR ⚠</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Research */}
+          <div className="bg-ob-glass border border-ob-edge rounded-[12px] p-[20px] backdrop-blur-[28px]">
+            <div className="font-mono text-[9px] text-ob-dim tracking-[0.14em] uppercase mb-[14px]">
+              Research Agent Findings
+            </div>
+            <div className="flex flex-col gap-[7px]">
+              <div className="flex justify-between items-center py-[7px] border-b border-ob-edge">
+                <span className="text-[11px] text-ob-muted font-normal">MCA21 Status</span>
+                <span className="font-mono text-[11px] text-[rgba(255,180,80,0.8)]">1 charge registered</span>
+              </div>
+              <div className="flex justify-between items-center py-[7px] border-b border-ob-edge">
+                <span className="text-[11px] text-ob-muted font-normal">eCourts</span>
+                <span className="font-mono text-[11px] text-[rgba(180,240,180,0.7)]">No proceedings</span>
+              </div>
+              <div className="flex justify-between items-center py-[7px] border-b border-ob-edge">
+                <span className="text-[11px] text-ob-muted font-normal">News Sentiment</span>
+                <span className="font-mono text-[11px] text-[rgba(180,240,180,0.7)]">Neutral</span>
+              </div>
+              <div className="flex justify-between items-center pt-[7px]">
+                <span className="text-[11px] text-ob-muted font-normal">Rev. Concentration</span>
+                <span className="font-mono text-[11px] text-[rgba(255,180,80,0.8)]">68% top-2 clients</span>
+              </div>
+            </div>
+          </div>
+
+          {/* CAM */}
+          <div className="bg-ob-glass border border-ob-edge rounded-[12px] p-[20px] backdrop-blur-[28px]">
+            <div className="font-mono text-[9px] text-ob-dim tracking-[0.14em] uppercase mb-[14px]">
+              Credit Appraisal Memo
+            </div>
+            <div className="h-[3px] rounded-[2px] mb-[14px]" style={{ background: 'linear-gradient(90deg, rgba(255,255,255,0.2), rgba(255,255,255,0.05))' }} />
+
+            <div className="flex justify-between text-[10px] py-[3px]">
+              <span className="text-ob-muted font-normal">Borrower</span>
+              <span className="font-mono text-ob-dim">Vardhman Agri Processing</span>
+            </div>
+            <div className="h-[1px] bg-ob-edge my-[6px]" />
+            <div className="flex justify-between text-[10px] py-[3px]">
+              <span className="text-ob-muted font-normal">Facility Type</span>
+              <span className="font-mono text-ob-dim">Working Capital — CC</span>
+            </div>
+            <div className="h-[1px] bg-ob-edge my-[6px]" />
+            <div className="flex justify-between text-[10px] py-[3px]">
+              <span className="text-ob-muted font-normal">Recommended Limit</span>
+              <span className="font-mono text-ob-dim">₹85 Lakh</span>
+            </div>
+            <div className="h-[1px] bg-ob-edge my-[6px]" />
+            <div className="flex justify-between text-[10px] py-[3px]">
+              <span className="text-ob-muted font-normal">Risk Premium</span>
+              <span className="font-mono text-ob-dim">+1.25% over base</span>
+            </div>
+
+            <div className="flex justify-between items-center mt-[12px] pt-[10px] border-t border-ob-edge">
+              <span className="font-mono text-[9px] text-ob-dim tracking-[0.08em]">GENERATED · 2m 34s</span>
+              <span className="text-[10px] font-semibold text-ob-text cursor-pointer tracking-[0.04em]">↓ Download Word</span>
+            </div>
           </div>
         </div>
-      </section>
-
-      {/* ── Final CTA ── */}
-      <section className="py-20 px-6 text-center">
-        <h2 className="font-display text-[32px] text-ic-text">
-          Ready to assess your first borrower?
-        </h2>
-        <Link
-          href="/app/start"
-          className="inline-block mt-6 px-7 py-3.5 bg-ic-accent text-white text-[14px] font-medium rounded-[8px] no-underline transition-opacity hover:opacity-90"
-        >
-          Get Started →
-        </Link>
-        <p className="text-[11px] text-ic-muted mt-4">
-          No account needed. Your data stays local.
-        </p>
-      </section>
+      </div>
     </div>
   );
 }

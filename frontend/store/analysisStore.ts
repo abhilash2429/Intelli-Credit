@@ -4,6 +4,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
 interface AnalysisState {
+  _hasHydrated: boolean;
   companyId: string;
   companyName: string;
   uploadedFileNames: string[];
@@ -24,12 +25,14 @@ interface AnalysisState {
   setExplanation: (explanation: any) => void;
   setResearch: (research: any[]) => void;
   reset: () => void;
+  setHasHydrated: (state: boolean) => void;
 }
 
 const INITIAL: Pick<
   AnalysisState,
-  'companyId' | 'companyName' | 'uploadedFileNames' | 'pipelineStatus' | 'pipelineStep' | 'scoreResult' | 'result' | 'explanation' | 'research'
+  '_hasHydrated' | 'companyId' | 'companyName' | 'uploadedFileNames' | 'pipelineStatus' | 'pipelineStep' | 'scoreResult' | 'result' | 'explanation' | 'research'
 > = {
+  _hasHydrated: false,
   companyId: '',
   companyName: '',
   uploadedFileNames: [],
@@ -57,11 +60,15 @@ export const useAnalysisStore = create<AnalysisState>()(
       setResearch: (research) => set({ research }),
       reset: () => {
         document.cookie = 'ic_session=; path=/; max-age=0';
-        set(INITIAL);
+        set((state) => ({ ...INITIAL, _hasHydrated: state._hasHydrated })); // retain hydration flag
       },
+      setHasHydrated: (state) => set({ _hasHydrated: state }),
     }),
     {
-      name: 'ic-analysis-store',
+      name: 'ob-analysis-store',
+      onRehydrateStorage: () => (state) => {
+        state?.setHasHydrated(true);
+      },
     }
   )
 );

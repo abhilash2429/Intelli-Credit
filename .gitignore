@@ -31,5 +31,5 @@ Thumbs.db
 # Runtime data
 uploads/
 cache/
-ml/model/
-ml/data/
+ml.model 
+ml.data

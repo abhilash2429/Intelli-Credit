@@ -14,7 +14,7 @@ from backend.config import settings
 from backend.core.india_context import red_flag_keywords
 from backend.core.research.ecourt_scraper import ECourtsScraper
 from backend.core.research.finding_extractor import FindingExtractor
-from backend.core.research.firecrawl_client import FirecrawlClient
+from backend.core.research.tavily_client import TavilyClient
 from backend.core.research.mca_scraper import MCAScraper
 from backend.core.research.news_scraper import NewsScraper
 from backend.core.research.search_strategies import get_all_queries
@@ -23,7 +23,7 @@ from backend.schemas.credit import FindingType, MCAReport, ResearchFinding, Seve
 
 logger = get_logger(__name__)
 
-AGENT_TOOLS = ["firecrawl_search", "mca_lookup", "court_search", "news_search", "keyword_scan"]
+AGENT_TOOLS = ["tavily_search", "mca_lookup", "court_search", "news_search", "keyword_scan"]
 
 RESEARCH_CHECKLIST = [
     "Search fraud/default/enforcement actions",
@@ -45,7 +45,7 @@ class ResearchBundle:
 class WebResearchAgent:
     """
     Hybrid research agent.
-    - `RESEARCH_MODE=live`: Firecrawl + Claude extraction
+    - `RESEARCH_MODE=live`: Tavily + Claude extraction
     - otherwise: deterministic scrapers/mock intelligence
     """
 
@@ -55,12 +55,12 @@ class WebResearchAgent:
         self.news_scraper = NewsScraper()
         self.finding_extractor = FindingExtractor()
         self.live_mode = settings.research_mode.lower() == "live"
-        self.firecrawl = None
-        if self.live_mode and settings.firecrawl_api_key:
+        self.tavily_client = None
+        if self.live_mode and settings.tavily_api_key:
             try:
-                self.firecrawl = FirecrawlClient()
+                self.tavily_client = TavilyClient()
             except Exception as exc:
-                logger.warning("research.firecrawl_init_failed", error=str(exc))
+                logger.warning("research.tavily_init_failed", error=str(exc))
                 self.live_mode = False
         self.job_id = ""
 
@@ -80,9 +80,9 @@ class WebResearchAgent:
         findings.extend(self._mca_findings(mca_report))
         findings.extend(await self.ecourts_scraper.search(company_name))
 
-        if self.live_mode and self.firecrawl is not None:
+        if self.live_mode and self.tavily_client is not None:
             findings.extend(
-                await self._run_live_firecrawl(
+                await self._run_live_tavily(
                     company_name=company_name,
                     sector=sector,
                     cin=cin,
@@ -106,7 +106,7 @@ class WebResearchAgent:
             research_job_id=self.job_id,
         )
 
-    async def _run_live_firecrawl(
+    async def _run_live_tavily(
         self,
         *,
         company_name: str,
@@ -137,13 +137,12 @@ class WebResearchAgent:
                     return
                 try:
                     results = await asyncio.to_thread(
-                        self.firecrawl.search,
+                        self.tavily_client.search,
                         q["query"],
                         num_results=min(
-                            settings.max_firecrawl_pages_per_search,
+                            settings.max_tavily_results_per_search,
                             settings.max_research_sources_per_company,
                         ),
-                        scrape_options={"formats": ["markdown"]},
                     )
                     query_results.append((q, results))
                     logger.info(
@@ -154,7 +153,7 @@ class WebResearchAgent:
                 except Exception as exc:
                     err = str(exc)
                     logger.warning("research.live.query_failed", query=q["query"][:120], error=err)
-                    if "PaymentRequiredError" in err or "402" in err:
+                    if "429" in err or "quota" in err.lower():
                         payment_required.set()
 
         await asyncio.gather(*[_run_query(q) for q in queries])
@@ -162,7 +161,7 @@ class WebResearchAgent:
         if payment_required.is_set() and not query_results:
             logger.warning(
                 "research.live.fallback_deterministic",
-                reason="firecrawl_payment_or_quota",
+                reason="tavily_quota_exceeded",
                 company=company_name,
             )
             fallback: List[ResearchFinding] = []

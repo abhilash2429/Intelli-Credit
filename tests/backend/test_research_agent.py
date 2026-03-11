@@ -24,12 +24,12 @@ def test_research_agent_mock_mode_returns_findings(monkeypatch):
 
 def test_research_agent_live_mode_uses_extracted_findings(monkeypatch):
     monkeypatch.setattr(settings, "research_mode", "live")
-    monkeypatch.setattr(settings, "firecrawl_api_key", "fc-test")
-    monkeypatch.setattr(settings, "max_firecrawl_pages_per_search", 1)
+    monkeypatch.setattr(settings, "tavily_api_key", "tvly-test")
+    monkeypatch.setattr(settings, "max_tavily_results_per_search", 1)
     monkeypatch.setattr(settings, "max_research_sources_per_company", 2)
 
-    class DummyFirecrawl:
-        def search(self, query, num_results=None, scrape_options=None):
+    class DummyTavily:
+        def search(self, query, num_results=None, search_depth=None):
             return [
                 {
                     "url": "https://example.com/news-1",
@@ -57,7 +57,7 @@ def test_research_agent_live_mode_uses_extracted_findings(monkeypatch):
                 }
             ]
 
-    monkeypatch.setattr("backend.core.research.web_agent.FirecrawlClient", lambda: DummyFirecrawl())
+    monkeypatch.setattr("backend.core.research.web_agent.TavilyClient", lambda: DummyTavily())
     monkeypatch.setattr("backend.core.research.web_agent.FindingExtractor", lambda: DummyExtractor())
 
     agent = WebResearchAgent()
@@ -76,15 +76,15 @@ def test_research_agent_live_mode_uses_extracted_findings(monkeypatch):
 
 def test_research_agent_live_mode_falls_back_on_payment_required(monkeypatch):
     monkeypatch.setattr(settings, "research_mode", "live")
-    monkeypatch.setattr(settings, "firecrawl_api_key", "fc-test")
-    monkeypatch.setattr(settings, "max_firecrawl_pages_per_search", 1)
+    monkeypatch.setattr(settings, "tavily_api_key", "tvly-test")
+    monkeypatch.setattr(settings, "max_tavily_results_per_search", 1)
     monkeypatch.setattr(settings, "max_research_sources_per_company", 1)
 
-    class DummyFirecrawl:
-        def search(self, query, num_results=None, scrape_options=None):
-            raise Exception("PaymentRequiredError")
+    class DummyTavily:
+        def search(self, query, num_results=None, search_depth=None):
+            raise Exception("429 Too Many Requests")
 
-    monkeypatch.setattr("backend.core.research.web_agent.FirecrawlClient", lambda: DummyFirecrawl())
+    monkeypatch.setattr("backend.core.research.web_agent.TavilyClient", lambda: DummyTavily())
 
     agent = WebResearchAgent()
     bundle = asyncio.run(

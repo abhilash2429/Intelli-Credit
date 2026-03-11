@@ -14,10 +14,10 @@ export default function RiskGauge({ score, decision, category }: RiskGaugeProps)
   const needleY = 150 + 100 * Math.sin((angle * Math.PI) / 180);
 
   const getDecisionStyle = (d: string) => {
-    if (d === 'APPROVE') return 'bg-ic-accent-light text-ic-positive';
-    if (d === 'CONDITIONAL_APPROVE') return 'bg-[#fdf0e8] text-ic-warning';
-    if (d === 'REJECT' || d === 'HARD_REJECT') return 'bg-[#fde8e8] text-ic-negative';
-    return 'bg-ic-surface-mid text-ic-muted';
+    if (d === 'APPROVE') return 'bg-ob-glass2 text-ob-ok';
+    if (d === 'CONDITIONAL_APPROVE') return 'bg-ob-warn-bg text-ob-warn';
+    if (d === 'REJECT' || d === 'HARD_REJECT') return 'bg-ob-warn-bg text-ob-warn';
+    return 'bg-ob-glass2 text-ob-muted';
   };
 
   return (
@@ -26,7 +26,7 @@ export default function RiskGauge({ score, decision, category }: RiskGaugeProps)
         {/* Track arc */}
         <path
           d="M 30 150 A 120 120 0 0 1 270 150"
-          stroke="var(--ic-surface-mid)"
+          stroke="var(--ob-surface2)"
           strokeWidth="20"
           fill="none"
           strokeLinecap="round"
@@ -34,7 +34,7 @@ export default function RiskGauge({ score, decision, category }: RiskGaugeProps)
         {/* Filled arc — calculated based on score */}
         <path
           d="M 30 150 A 120 120 0 0 1 270 150"
-          stroke="var(--ic-accent)"
+          stroke="var(--ob-text)"
           strokeWidth="20"
           fill="none"
           strokeLinecap="round"
@@ -47,20 +47,20 @@ export default function RiskGauge({ score, decision, category }: RiskGaugeProps)
           y1="150"
           x2={needleX}
           y2={needleY}
-          stroke="var(--ic-accent)"
+          stroke="var(--ob-text)"
           strokeWidth="2.5"
           strokeLinecap="round"
         />
-        <circle cx="150" cy="150" r="5" fill="var(--ic-accent)" />
+        <circle cx="150" cy="150" r="5" fill="var(--ob-text)" />
 
         {/* Score text */}
         <text
           x="150"
           y="138"
           textAnchor="middle"
-          fill="var(--ic-text)"
+          fill="var(--ob-text)"
           fontSize="32"
-          fontFamily="Playfair Display, serif"
+          fontFamily="DM Serif Display, serif"
         >
           {clampedScore.toFixed(1)}
         </text>
@@ -68,9 +68,9 @@ export default function RiskGauge({ score, decision, category }: RiskGaugeProps)
           x="150"
           y="163"
           textAnchor="middle"
-          fill="var(--ic-muted)"
+          fill="var(--ob-muted)"
           fontSize="12"
-          fontFamily="DM Sans, sans-serif"
+          fontFamily="Manrope, sans-serif"
         >
           {category}
         </text>

@@ -176,49 +176,49 @@ export default function UploadPage() {
     }
   };
 
-  const labelClass = 'text-[11px] font-medium tracking-[0.12em] uppercase text-ic-muted';
-  const inputClass = 'mt-1 w-full rounded-[10px] bg-ic-surface border border-ic-border px-4 py-2 text-ic-text focus:outline-none focus:ring-2 focus:ring-ic-accent/40';
+  const labelClass = 'font-mono text-[9px] font-normal tracking-[0.14em] uppercase text-ob-dim';
+  const inputClass = 'mt-[8px] w-full rounded-[6px] bg-ob-glass2 border border-ob-edge px-4 py-2 text-[13px] text-ob-text focus:outline-none focus:ring-1 focus:ring-ob-text/50 transition-all font-body font-light';
 
   return (
-    <div className="bg-ic-page py-10 px-4 md:px-8">
+    <div className="bg-ob-bg py-10 px-4 md:px-8">
       <div className="max-w-[1100px] mx-auto flex flex-col lg:flex-row gap-5">
         {/* Left column — 60% */}
         <div className="flex-[3] space-y-5">
           <div>
-            <h1 className="font-display text-[26px] font-normal text-ic-text">Upload Documents</h1>
-            <p className="text-[14px] text-ic-muted mt-1">Add company details, upload documents, and start CAM preparation.</p>
+            <h1 className="font-display text-[26px] font-normal text-ob-text">Upload Documents</h1>
+            <p className="text-[14px] text-ob-muted mt-1">Add company details, upload documents, and start CAM preparation.</p>
           </div>
 
           {/* Basic details card */}
-          <div className="bg-ic-surface border border-ic-border rounded-[10px] p-5">
+          <div className="bg-ob-glass border border-ob-edge rounded-[12px] p-[20px] backdrop-blur-[28px]">
             <p className={`${labelClass} mb-2.5`}>Application Details</p>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <label className={`md:col-span-2 ${labelClass}`}>Company name<input value={companyName} onChange={(e) => setCompanyName(e.target.value)} placeholder="e.g. Vizag Steel Works Pvt Ltd" className={inputClass} /></label>
               <label className={labelClass}>Loan amount (INR Cr)<input type="number" value={loanAmount} onChange={(e) => setLoanAmount(Number(e.target.value))} className={inputClass} /></label>
               <label className={`md:col-span-2 ${labelClass}`}>Sector
-                <select value={sector} onChange={(e) => setSector(e.target.value)} className={inputClass}>
-                  {['agri_processing', 'manufacturing', 'nbfc', 'real_estate', 'textiles', 'it_services'].map((s) => (<option key={s} value={s}>{s.replace('_', ' ').toUpperCase()}</option>))}
+                <select value={sector} onChange={(e) => setSector(e.target.value)} className={`${inputClass} bg-ob-glass2`}>
+                  {['agri_processing', 'manufacturing', 'nbfc', 'real_estate', 'textiles', 'it_services'].map((s) => (<option key={s} value={s} className="bg-ob-surface text-ob-text">{s.replace('_', ' ').toUpperCase()}</option>))}
                 </select>
               </label>
               <label className={labelClass}>Purpose
-                <select value={loanPurpose} onChange={(e) => setLoanPurpose(e.target.value)} className={inputClass}>
-                  <option value="working_capital">Working Capital</option><option value="term_loan">Term Loan</option><option value="capex">Capex</option><option value="refinance">Refinance</option>
+                <select value={loanPurpose} onChange={(e) => setLoanPurpose(e.target.value)} className={`${inputClass} bg-ob-glass2`}>
+                  <option value="working_capital" className="bg-ob-surface text-ob-text">Working Capital</option><option value="term_loan" className="bg-ob-surface text-ob-text">Term Loan</option><option value="capex" className="bg-ob-surface text-ob-text">Capex</option><option value="refinance" className="bg-ob-surface text-ob-text">Refinance</option>
                 </select>
               </label>
             </div>
           </div>
 
           {/* Upload dropzone */}
-          <div className="bg-ic-surface border border-ic-border rounded-[10px] p-5">
+          <div className="bg-ob-glass border border-ob-edge rounded-[12px] p-[20px] backdrop-blur-[28px]">
             <p className={`${labelClass} mb-2.5`}>Documents</p>
             <UploadZone onFilesReady={setFiles} />
           </div>
 
           {/* Optional borrower input */}
-          <div className="bg-ic-surface border border-ic-border rounded-[10px] p-5 space-y-4">
+          <div className="bg-ob-glass border border-ob-edge rounded-[12px] p-[20px] backdrop-blur-[28px] space-y-4">
             <button type="button" onClick={() => setOptionalOpen((prev) => !prev)} className="w-full flex items-center justify-between text-left bg-transparent border-none cursor-pointer">
-              <span className="text-[14px] font-medium text-ic-text">Optional borrower input (Finance Officer)</span>
-              <span className="text-[12px] text-ic-muted">{optionalOpen ? 'Hide' : 'Add details'}</span>
+              <span className="text-[14px] font-medium text-ob-text">Optional borrower input (Finance Officer)</span>
+              <span className="text-[12px] text-ob-muted">{optionalOpen ? 'Hide' : 'Add details'}</span>
             </button>
             {optionalOpen && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -227,8 +227,8 @@ export default function UploadPage() {
                 <label className={labelClass}>Email<input type="email" value={financeOfficerEmail} onChange={(e) => setFinanceOfficerEmail(e.target.value)} className={inputClass} /></label>
                 <label className={labelClass}>Phone<input value={financeOfficerPhone} onChange={(e) => setFinanceOfficerPhone(e.target.value)} className={inputClass} /></label>
                 <label className={labelClass}>Capacity utilization ({capacityPct}%)<input type="range" min={0} max={100} value={capacityPct} onChange={(e) => setCapacityPct(Number(e.target.value))} className="mt-2 w-full" /></label>
-                <label className={labelClass}>Inventory situation<select value={inventoryLevel} onChange={(e) => setInventoryLevel(e.target.value)} className={inputClass}><option value="ADEQUATE">Adequate</option><option value="LOW">Low</option><option value="EXCESS">Excess</option><option value="SUSPICIOUS">Needs review</option></select></label>
-                <label className={labelClass}>Management cooperation<select value={managementCooperation} onChange={(e) => setManagementCooperation(e.target.value)} className={inputClass}><option value="COOPERATIVE">Cooperative</option><option value="EVASIVE">Evasive</option><option value="REFUSED">Refused key clarifications</option></select></label>
+                <label className={labelClass}>Inventory situation<select value={inventoryLevel} onChange={(e) => setInventoryLevel(e.target.value)} className={`${inputClass} bg-ob-glass2`}><option value="ADEQUATE" className="bg-ob-surface text-ob-text">Adequate</option><option value="LOW" className="bg-ob-surface text-ob-text">Low</option><option value="EXCESS" className="bg-ob-surface text-ob-text">Excess</option><option value="SUSPICIOUS" className="bg-ob-surface text-ob-text">Needs review</option></select></label>
+                <label className={labelClass}>Management cooperation<select value={managementCooperation} onChange={(e) => setManagementCooperation(e.target.value)} className={`${inputClass} bg-ob-glass2`}><option value="COOPERATIVE" className="bg-ob-surface text-ob-text">Cooperative</option><option value="EVASIVE" className="bg-ob-surface text-ob-text">Evasive</option><option value="REFUSED" className="bg-ob-surface text-ob-text">Refused key clarifications</option></select></label>
                 <label className={labelClass}>Major customers<input value={majorCustomers} onChange={(e) => setMajorCustomers(e.target.value)} placeholder="Top buyers and concentration" className={inputClass} /></label>
                 <label className={`md:col-span-2 ${labelClass}`}>Business highlights<textarea value={businessHighlights} onChange={(e) => setBusinessHighlights(e.target.value)} rows={3} placeholder="Orders, seasonal trends, utilization" className={`${inputClass} min-h-[100px]`} /></label>
                 <label className={`md:col-span-2 ${labelClass}`}>Risks disclosed by borrower<textarea value={keyRisksDisclosed} onChange={(e) => setKeyRisksDisclosed(e.target.value)} rows={2} placeholder="Any expected disruptions" className={`${inputClass} min-h-[80px]`} /></label>
@@ -236,26 +236,26 @@ export default function UploadPage() {
                 <label className={labelClass}>Planned capex<input value={plannedCapex} onChange={(e) => setPlannedCapex(e.target.value)} className={inputClass} /></label>
               </div>
             )}
-            <p className="text-[12px] text-ic-muted">These fields are optional. If provided, they are used as borrower clarifications in risk scoring and CAM.</p>
+            <p className="text-[12px] text-ob-muted">These fields are optional. If provided, they are used as borrower clarifications in risk scoring and CAM.</p>
             {hasOptionalInputs && (
-              <div className="bg-ic-accent-light border border-ic-border rounded-[10px] p-4">
-                <p className="text-[13px] font-medium text-ic-accent">Estimated borrower-input score adjustment</p>
-                <p className="text-[12px] text-ic-muted mt-1">{duePreviewLoading ? 'Calculating expected impact...' : `${Number(duePreview?.score_adjustment || 0) >= 0 ? '+' : ''}${Number(duePreview?.score_adjustment || 0).toFixed(1)} raw adjustment`}</p>
-                {!!duePreview?.risk_factors?.length && <p className="text-[11px] text-ic-negative mt-2">Risk cues: {duePreview.risk_factors.slice(0, 4).join(', ')}</p>}
-                {!!duePreview?.positive_factors?.length && <p className="text-[11px] text-ic-positive mt-1">Positive cues: {duePreview.positive_factors.slice(0, 4).join(', ')}</p>}
+              <div className="bg-ob-glass2 border border-ob-edge rounded-[10px] p-4">
+                <p className="text-[13px] font-medium text-ob-text">Estimated borrower-input score adjustment</p>
+                <p className="text-[12px] text-ob-muted mt-1">{duePreviewLoading ? 'Calculating expected impact...' : `${Number(duePreview?.score_adjustment || 0) >= 0 ? '+' : ''}${Number(duePreview?.score_adjustment || 0).toFixed(1)} raw adjustment`}</p>
+                {!!duePreview?.risk_factors?.length && <p className="text-[11px] text-ob-warn mt-2">Risk cues: {duePreview.risk_factors.slice(0, 4).join(', ')}</p>}
+                {!!duePreview?.positive_factors?.length && <p className="text-[11px] text-ob-ok mt-1">Positive cues: {duePreview.positive_factors.slice(0, 4).join(', ')}</p>}
               </div>
             )}
           </div>
 
           {/* Upload progress */}
-          <div className="bg-ic-surface border border-ic-border rounded-[10px] p-5">
+          <div className="bg-ob-glass border border-ob-edge rounded-[12px] p-[20px] backdrop-blur-[28px]">
             <p className={`${labelClass} mb-2.5`}>Upload Progress</p>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               {UPLOAD_STAGES.map((stage, idx) => {
                 const completed = idx < activeStage;
                 const active = idx === activeStage && loading;
                 return (
-                  <div key={stage} className={`rounded-[10px] px-3 py-2 text-[13px] border ${completed ? 'bg-ic-accent-light border-ic-accent/30 text-ic-positive' : active ? 'bg-ic-accent-light border-ic-accent/50 text-ic-accent animate-pulse' : 'bg-ic-surface-mid border-ic-border text-ic-muted'}`}>
+                  <div key={stage} className={`rounded-[6px] px-3 py-2 text-[12px] font-body border ${completed ? 'bg-ob-glass2 border-ob-text/30 text-[rgba(180,240,180,0.7)]' : active ? 'bg-ob-glass2 border-ob-text/50 text-ob-text animate-pulse' : 'bg-transparent border-ob-edge text-ob-muted'}`}>
                     {completed ? '✓ ' : active ? '◌ ' : '○ '} {stage}
                   </div>
                 );
@@ -263,14 +263,14 @@ export default function UploadPage() {
             </div>
           </div>
 
-          {error && (<div className="bg-[#fdf0e8] border border-[#f3d5bc] rounded-[10px] p-4"><p className="text-ic-warning text-[13px]">{error}</p></div>)}
+          {error && (<div className="bg-ob-warn-bg border border-ob-warn-edge rounded-[10px] p-4"><p className="text-ob-warn text-[13px]">{error}</p></div>)}
 
           {/* Action buttons */}
           <div className="flex gap-3">
             <button
               onClick={startAnalysis}
               disabled={loading || files.length === 0}
-              className="flex-1 py-3 rounded-[10px] bg-ic-accent text-white font-medium text-base transition-opacity hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
+              className="flex-1 py-[12px] rounded-[6px] bg-ob-text text-ob-bg font-body font-bold text-[13px] tracking-[0.04em] transition-opacity hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {loading ? 'Starting your CAM analysis...' : `Continue to Analyst Notes → (${files.length} files)`}
             </button>
@@ -279,33 +279,33 @@ export default function UploadPage() {
 
         {/* Right column — 40% */}
         <div className="flex-[2] space-y-5">
-          <div className="bg-ic-surface border border-ic-border rounded-[10px] p-5">
+          <div className="bg-ob-glass border border-ob-edge rounded-[12px] p-[20px] backdrop-blur-[28px]">
             <p className={`${labelClass} mb-2.5`}>What to Upload</p>
             <div className="space-y-2">
               {['Annual Report / Balance Sheet', 'Bank Statements (12 months)', 'GST Returns (GSTR-3B)', 'IT Returns (ITR)', 'Audit Report'].map((item) => (
-                <div key={item} className="flex items-center gap-2 py-1"><span className="w-4 h-4 rounded-full border-2 border-ic-border flex-shrink-0" /><span className="text-[13px] text-ic-text">{item}</span></div>
+                <div key={item} className="flex items-center gap-2 py-1"><span className="w-4 h-4 rounded-full border-2 border-ob-edge flex-shrink-0" /><span className="text-[13px] text-ob-text">{item}</span></div>
               ))}
             </div>
           </div>
-          <div className="bg-ic-surface border border-ic-border rounded-[10px] p-5">
+          <div className="bg-ob-glass border border-ob-edge rounded-[12px] p-[20px] backdrop-blur-[28px]">
             <p className={`${labelClass} mb-2.5`}>Supported Formats</p>
             <div className="space-y-1.5">
-              {SUPPORTED_FORMATS.map((f) => (<div key={f.type} className="flex justify-between text-[12px]"><span className="font-mono font-medium text-ic-text">{f.type}</span><span className="text-ic-muted">{f.desc}</span></div>))}
+              {SUPPORTED_FORMATS.map((f) => (<div key={f.type} className="flex justify-between text-[12px]"><span className="font-mono font-medium text-ob-text">{f.type}</span><span className="text-ob-muted">{f.desc}</span></div>))}
             </div>
           </div>
-          <div className="bg-ic-surface border border-ic-border rounded-[10px] p-5">
+          <div className="bg-ob-glass border border-ob-edge rounded-[12px] p-[20px] backdrop-blur-[28px]">
             <div className="flex items-center justify-between gap-3 mb-2.5">
               <p className={labelClass}>Tool Connectivity</p>
-              <button type="button" onClick={() => checkIntegrations(true)} className="px-3 py-1 rounded-md bg-ic-accent text-white text-[11px] font-medium disabled:opacity-40" disabled={integrationLoading}>{integrationLoading ? 'Checking...' : 'Run live check'}</button>
+              <button type="button" onClick={() => checkIntegrations(true)} className="px-3 py-1 rounded-md bg-ob-text text-ob-bg text-[11px] font-bold disabled:opacity-40 transition-colors hover:bg-ob-cream" disabled={integrationLoading}>{integrationLoading ? 'Checking...' : 'Run live check'}</button>
             </div>
-            {integrationError && (<div className="bg-[#fdf0e8] border border-[#f3d5bc] rounded-md p-2 mb-2"><p className="text-ic-warning text-[11px]">{integrationError}</p></div>)}
+            {integrationError && (<div className="bg-ob-warn-bg border border-ob-warn-edge rounded-md p-2 mb-2"><p className="text-ob-warn text-[11px]">{integrationError}</p></div>)}
             {integrationHealth?.integrations && (
               <div className="space-y-2">
                 {Object.entries(integrationHealth.integrations).map(([tool, info]: [string, any]) => (
-                  <div key={tool} className="rounded-md border border-ic-border bg-ic-surface-mid p-2.5">
-                    <p className="text-[12px] font-medium text-ic-text capitalize">{tool.replace('_', ' ')}</p>
-                    <p className="text-[11px] text-ic-muted">{info.configured ? 'Configured' : 'Not configured'} · {info.ok ? 'OK' : 'Issue'}</p>
-                    {info.error && <p className="text-[11px] text-ic-negative mt-0.5">{String(info.error)}</p>}
+                  <div key={tool} className="rounded-md border border-ob-edge bg-ob-surface2 p-2.5">
+                    <p className="text-[12px] font-medium text-ob-text capitalize">{tool.replace('_', ' ')}</p>
+                    <p className="text-[11px] text-ob-muted">{info.configured ? 'Configured' : 'Not configured'} · {info.ok ? 'OK' : 'Issue'}</p>
+                    {info.error && <p className="text-[11px] text-ob-warn mt-0.5">{String(info.error)}</p>}
                   </div>
                 ))}
               </div>

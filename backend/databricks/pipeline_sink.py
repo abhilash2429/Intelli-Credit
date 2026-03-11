@@ -123,7 +123,7 @@ class DatabricksPipelineSink:
         *,
         company_id: str,
         findings: Iterable[ResearchFinding],
-        firecrawl_job_id: str = "",
+        research_job_id: str = "",
     ) -> None:
         rows = []
         now = datetime.utcnow()
@@ -144,7 +144,7 @@ class DatabricksPipelineSink:
                     raw_content=(finding.raw_snippet or "")[:2000],
                     score_impact=self._score_impact_from_severity(finding.severity.value),
                     cam_section="research_summary",
-                    firecrawl_job_id=firecrawl_job_id,
+                    research_job_id=research_job_id,
                     ingested_at=now,
                 )
             )

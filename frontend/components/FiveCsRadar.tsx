@@ -46,43 +46,43 @@ export default function FiveCsRadar({ company, benchmark }: Props) {
   ];
 
   return (
-    <div className="bg-ic-surface border border-ic-border rounded-[10px] p-5">
-      <p className="text-[10px] font-medium tracking-[0.12em] uppercase text-ic-muted mb-2.5">Five Cs Radar</p>
+    <div className="bg-ob-glass border border-ob-edge rounded-[12px] p-[20px] backdrop-blur-[28px]">
+      <p className="font-mono text-[9px] font-normal tracking-[0.14em] uppercase text-ob-dim mb-2.5">Five Cs Radar</p>
       <ResponsiveContainer width="100%" height={360}>
         <RadarChart data={data}>
-          <PolarGrid stroke="var(--ic-border)" />
+          <PolarGrid stroke="var(--ob-edge)" />
           <PolarAngleAxis
             dataKey="metric"
-            tick={{ fill: 'var(--ic-muted)', fontSize: 11, fontFamily: 'DM Sans, sans-serif' }}
+            tick={{ fill: 'var(--ob-muted)', fontSize: 11, fontFamily: 'Manrope, sans-serif' }}
           />
           <PolarRadiusAxis
             angle={30}
             domain={[0, 10]}
-            tick={{ fill: 'var(--ic-muted)', fontSize: 11, fontFamily: 'DM Mono, monospace' }}
+            tick={{ fill: 'var(--ob-muted)', fontSize: 11, fontFamily: 'DM Mono, monospace' }}
           />
           <Radar
             name="Company Score"
             dataKey="company"
-            stroke="var(--ic-accent)"
-            fill="var(--ic-accent)"
+            stroke="var(--ob-text)"
+            fill="var(--ob-text)"
             fillOpacity={0.15}
           />
           <Radar
             name="Industry Benchmark"
             dataKey="benchmark"
-            stroke="var(--ic-tan)"
-            fill="var(--ic-tan)"
+            stroke="var(--ob-edge2)"
+            fill="var(--ob-edge2)"
             fillOpacity={0.1}
           />
           <Tooltip
             contentStyle={{
-              backgroundColor: 'var(--ic-surface)',
-              border: '1px solid var(--ic-border)',
-              color: 'var(--ic-text)',
+              backgroundColor: 'var(--ob-surface)',
+              border: '1px solid var(--ob-edge)',
+              color: 'var(--ob-text)',
               fontFamily: 'DM Mono, monospace',
             }}
           />
-          <Legend wrapperStyle={{ color: 'var(--ic-text)', fontSize: 12 }} />
+          <Legend wrapperStyle={{ color: 'var(--ob-text)', fontSize: 12 }} />
         </RadarChart>
       </ResponsiveContainer>
     </div>

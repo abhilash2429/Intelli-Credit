@@ -79,13 +79,13 @@ export default function ChatInterface({ companyId, companyName }: ChatInterfaceP
       <div className="flex-1 overflow-y-auto space-y-4 px-6 py-4">
         {messages.length === 0 && (
           <div className="text-center mt-8">
-            <p className="text-ic-muted mb-6 text-[14px]">Ask anything about {companyName}&apos;s credit appraisal</p>
+            <p className="text-ob-muted mb-6 text-[14px]">Ask anything about {companyName}&apos;s credit appraisal</p>
             <div className="flex flex-wrap gap-2 justify-center">
               {STARTER_QUESTIONS.map((q, i) => (
                 <button
                   key={i}
                   onClick={() => sendMessage(q)}
-                  className="px-3 py-2 text-[12px] bg-ic-surface-mid border border-ic-border rounded-[10px] text-ic-text hover:bg-ic-accent-light hover:border-ic-accent/30 transition-colors"
+                  className="px-3 py-2 text-[12px] bg-ob-glass2 border border-ob-edge rounded-[12px] text-ob-text hover:bg-ob-glass2 hover:border-ob-text/30 transition-colors"
                 >
                   {q}
                 </button>
@@ -100,11 +100,10 @@ export default function ChatInterface({ companyId, companyName }: ChatInterfaceP
             className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
           >
             <div
-              className={`max-w-2xl px-4 py-3 ${
-                msg.role === 'user'
-                  ? 'bg-ic-accent text-white rounded-[10px] rounded-br-[2px]'
-                  : 'bg-ic-surface-mid text-ic-text rounded-[10px] rounded-bl-[2px]'
-              }`}
+              className={`max-w-2xl px-4 py-3 ${msg.role === 'user'
+                  ? 'bg-ob-text text-ob-bg rounded-[12px] rounded-br-[2px]'
+                  : 'bg-ob-glass2 text-ob-text rounded-[12px] rounded-bl-[2px]'
+                }`}
             >
               <p className="text-[14px] whitespace-pre-wrap leading-relaxed">{msg.content}</p>
               {msg.sources && msg.sources.length > 0 && (
@@ -112,7 +111,7 @@ export default function ChatInterface({ companyId, companyName }: ChatInterfaceP
                   {msg.sources.map((s, j) => (
                     <span
                       key={j}
-                      className="px-2 py-0.5 text-[10px] rounded bg-ic-accent-light text-ic-accent border border-ic-accent/20"
+                      className="px-2 py-0.5 text-[10px] rounded bg-ob-glass2 text-ob-text border border-ob-text/20"
                     >
                       {s}
                     </span>
@@ -125,8 +124,8 @@ export default function ChatInterface({ companyId, companyName }: ChatInterfaceP
 
         {loading && (
           <div className="flex justify-start">
-            <div className="bg-ic-surface-mid rounded-[10px] rounded-bl-[2px] px-4 py-3">
-              <p className="text-ic-muted text-[14px] animate-pulse">Thinking...</p>
+            <div className="bg-ob-glass2 rounded-[12px] rounded-bl-[2px] px-4 py-3">
+              <p className="text-ob-muted text-[14px] animate-pulse">Thinking...</p>
             </div>
           </div>
         )}
@@ -134,7 +133,7 @@ export default function ChatInterface({ companyId, companyName }: ChatInterfaceP
       </div>
 
       {/* Input bar */}
-      <div className="border-t border-ic-border bg-ic-surface p-4">
+      <div className="border-t border-ob-edge bg-ob-glass p-4">
         <div className="flex gap-3">
           <input
             type="text"
@@ -142,12 +141,12 @@ export default function ChatInterface({ companyId, companyName }: ChatInterfaceP
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && sendMessage(input)}
             placeholder="Ask about this credit appraisal..."
-            className="flex-1 px-4 py-3 bg-ic-surface border border-ic-border rounded-[10px] text-ic-text text-[14px] placeholder:text-ic-muted focus:outline-none focus:ring-2 focus:ring-ic-accent/40"
+            className="flex-1 px-4 py-3 bg-ob-glass border border-ob-edge rounded-[12px] text-ob-text text-[14px] placeholder:text-ob-muted focus:outline-none focus:ring-2 focus:ring-ob-text/40"
           />
           <button
             onClick={() => sendMessage(input)}
             disabled={!input.trim() || loading}
-            className="px-5 py-3 bg-ic-accent text-white rounded-[10px] font-medium transition-opacity hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="px-5 py-3 bg-ob-text text-ob-bg rounded-[12px] font-bold transition-colors hover:bg-ob-cream disabled:opacity-40 disabled:cursor-not-allowed"
           >
             →
           </button>

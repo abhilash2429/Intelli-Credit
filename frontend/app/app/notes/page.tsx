@@ -71,57 +71,57 @@ export default function DueDiligencePage() {
     }
   };
 
-  const labelClass = 'text-[11px] font-medium tracking-[0.12em] uppercase text-ic-muted';
-  const inputClass = 'mt-1 w-full rounded-[10px] bg-ic-surface border border-ic-border px-3 py-2 text-ic-text focus:outline-none focus:ring-2 focus:ring-ic-accent/40';
+  const labelClass = 'font-mono text-[9px] font-normal tracking-[0.14em] uppercase text-ob-dim';
+  const inputClass = 'mt-[8px] w-full rounded-[6px] bg-ob-glass2 border border-ob-edge px-3 py-2 text-[13px] text-ob-text focus:outline-none focus:ring-1 focus:ring-ob-text/50 transition-all font-body font-light';
 
   return (
-    <div className="bg-ic-page py-10 px-4 md:px-8">
+    <div className="bg-ob-bg py-10 px-4 md:px-8">
       <div className="max-w-[1100px] mx-auto flex flex-col lg:flex-row gap-5">
         {/* Left column — 65% */}
         <div className="flex-[65] space-y-5">
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="font-display text-[26px] font-normal text-ic-text">Due Diligence Portal</h1>
-              <span className="text-[11px] font-mono text-ic-muted bg-ic-surface-mid px-2 py-0.5 rounded">Step 2 of 4</span>
+              <h1 className="font-display text-[26px] font-normal text-ob-text">Due Diligence Portal</h1>
+              <span className="text-[11px] font-mono text-ob-muted bg-ob-surface2 px-2 py-0.5 rounded">Step 2 of 4</span>
             </div>
-            <p className="text-[14px] text-ic-muted mt-1">
-              Credit Officer input for <span className="font-medium text-ic-text">{companyName || 'Unknown Company'}</span>
+            <p className="text-[14px] text-ob-muted mt-1">
+              Credit Officer input for <span className="font-medium text-ob-text">{companyName || 'Unknown Company'}</span>
             </p>
           </div>
 
-          <div className="bg-ic-surface border border-ic-border rounded-[10px] p-5">
-            <h2 className="font-display text-[18px] text-ic-text mb-4">Business Overview</h2>
+          <div className="bg-ob-glass border border-ob-edge rounded-[12px] p-[20px] backdrop-blur-[28px]">
+            <h2 className="font-display text-[18px] text-ob-text mb-4">Business Overview</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <label className={labelClass}>Factory Visit Date<input type="date" value={factoryVisitDate} onChange={(e) => setFactoryVisitDate(e.target.value)} className={inputClass} /></label>
               <label className={labelClass}>Management Interview Rating ({interviewRating}/5)<input type="range" min={1} max={5} value={interviewRating} onChange={(e) => setInterviewRating(Number(e.target.value))} className="mt-2 w-full" /></label>
             </div>
           </div>
 
-          <div className="bg-ic-surface border border-ic-border rounded-[10px] p-5">
-            <h2 className="font-display text-[18px] text-ic-text mb-4">Management & Governance</h2>
+          <div className="bg-ob-glass border border-ob-edge rounded-[12px] p-[20px] backdrop-blur-[28px]">
+            <h2 className="font-display text-[18px] text-ob-text mb-4">Management & Governance</h2>
             <div className="mb-4">
               <label className={`block ${labelClass} mb-1`}>Capacity Utilization ({capacity}%)</label>
               <input type="range" min={0} max={100} value={capacity} onChange={(e) => setCapacity(Number(e.target.value))} className="w-full" />
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <label className={labelClass}>Factory Condition<select value={factoryCondition} onChange={(e) => setFactoryCondition(e.target.value)} className={inputClass}>{['EXCELLENT', 'GOOD', 'FAIR', 'POOR'].map((x) => (<option key={x} value={x}>{x}</option>))}</select></label>
-              <label className={labelClass}>Inventory Levels<select value={inventoryLevels} onChange={(e) => setInventoryLevels(e.target.value)} className={inputClass}>{['ADEQUATE', 'LOW', 'EXCESS', 'SUSPICIOUS'].map((x) => (<option key={x} value={x}>{x}</option>))}</select></label>
-              <label className={labelClass}>Management Cooperation<select value={managementCooperation} onChange={(e) => setManagementCooperation(e.target.value)} className={inputClass}>{['COOPERATIVE', 'EVASIVE', 'REFUSED'].map((x) => (<option key={x} value={x}>{x}</option>))}</select></label>
+              <label className={labelClass}>Factory Condition<select value={factoryCondition} onChange={(e) => setFactoryCondition(e.target.value)} className={`${inputClass} bg-ob-glass2`}>{['EXCELLENT', 'GOOD', 'FAIR', 'POOR'].map((x) => (<option key={x} value={x} className="bg-ob-surface text-ob-text">{x}</option>))}</select></label>
+              <label className={labelClass}>Inventory Levels<select value={inventoryLevels} onChange={(e) => setInventoryLevels(e.target.value)} className={`${inputClass} bg-ob-glass2`}>{['ADEQUATE', 'LOW', 'EXCESS', 'SUSPICIOUS'].map((x) => (<option key={x} value={x} className="bg-ob-surface text-ob-text">{x}</option>))}</select></label>
+              <label className={labelClass}>Management Cooperation<select value={managementCooperation} onChange={(e) => setManagementCooperation(e.target.value)} className={`${inputClass} bg-ob-glass2`}>{['COOPERATIVE', 'EVASIVE', 'REFUSED'].map((x) => (<option key={x} value={x} className="bg-ob-surface text-ob-text">{x}</option>))}</select></label>
             </div>
           </div>
 
-          <div className="bg-ic-surface border border-ic-border rounded-[10px] p-5">
-            <h2 className="font-display text-[18px] text-ic-text mb-4">Analyst Notes</h2>
+          <div className="bg-ob-glass border border-ob-edge rounded-[12px] p-[20px] backdrop-blur-[28px]">
+            <h2 className="font-display text-[18px] text-ob-text mb-4">Analyst Notes</h2>
             <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={8} placeholder="Mention production, order-book, utilization, inventory quality, management behavior..." className={`${inputClass} min-h-[100px]`} />
-            <p className="text-[11px] text-ic-muted mt-1 font-mono">{charCount} characters</p>
+            <p className="text-[11px] text-ob-muted mt-1 font-mono">{charCount} characters</p>
           </div>
 
-          {error && (<div className="bg-[#fdf0e8] border border-[#f3d5bc] rounded-[10px] p-3"><p className="text-ic-warning text-[13px]">{error}</p></div>)}
+          {error && (<div className="bg-ob-warn-bg border border-ob-warn-edge rounded-[10px] p-3"><p className="text-ob-warn text-[13px]">{error}</p></div>)}
 
           {/* Footer row: Back + Submit */}
           <div className="flex items-center justify-between">
-            <button onClick={() => router.push('/app/upload')} className="text-[13px] text-ic-muted hover:text-ic-text transition-colors">← Back to Upload</button>
-            <button onClick={handleSubmit} disabled={loading || !notes.trim()} className="py-3 px-8 rounded-[10px] bg-ic-accent text-white font-medium transition-opacity hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed">
+            <button onClick={() => router.push('/app/upload')} className="text-[13px] text-ob-muted hover:text-ob-text transition-colors">← Back to Upload</button>
+            <button onClick={handleSubmit} disabled={loading || !notes.trim()} className="py-[12px] px-8 rounded-[6px] bg-ob-text text-ob-bg text-[13px] font-body font-bold tracking-[0.04em] transition-opacity hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed">
               {loading ? 'Submitting...' : 'Run Analysis →'}
             </button>
           </div>
@@ -129,35 +129,35 @@ export default function DueDiligencePage() {
 
         {/* Right column — 35%, sticky */}
         <div className="flex-[35] space-y-5 lg:sticky lg:top-[72px] lg:self-start">
-          <div className="bg-ic-surface border border-ic-border rounded-[10px] p-5">
-            <p className="text-[10px] font-medium tracking-[0.12em] uppercase text-ic-muted mb-2.5">Completion</p>
+          <div className="bg-ob-glass border border-ob-edge rounded-[12px] p-[20px] backdrop-blur-[28px]">
+            <p className="font-mono text-[9px] font-normal tracking-[0.14em] uppercase text-ob-dim mb-2.5">Completion</p>
             <div className="space-y-2">
               {sections.map((s) => (
                 <div key={s.label} className="flex items-center gap-2 text-[13px]">
-                  <span className={`w-4 h-4 rounded-full flex-shrink-0 ${s.filled ? 'bg-ic-accent' : 'border-2 border-ic-border'}`} />
-                  <span className={s.filled ? 'text-ic-text' : 'text-ic-muted'}>{s.label}</span>
+                  <span className={`w-4 h-4 rounded-full flex-shrink-0 ${s.filled ? 'bg-ob-text' : 'border-2 border-ob-edge'}`} />
+                  <span className={s.filled ? 'text-ob-text' : 'text-ob-muted'}>{s.label}</span>
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="bg-ic-surface border border-ic-border rounded-[10px] p-5">
-            <p className="text-[10px] font-medium tracking-[0.12em] uppercase text-ic-muted mb-2.5">Live AI Analysis</p>
+          <div className="bg-ob-glass border border-ob-edge rounded-[12px] p-[20px] backdrop-blur-[28px]">
+            <p className="font-mono text-[9px] font-normal tracking-[0.14em] uppercase text-ob-dim mb-2.5">Live AI Analysis</p>
             {!preview ? (
-              <p className="text-ic-muted text-[13px]">Start typing notes to see extracted risk flags in real-time.</p>
+              <p className="text-ob-muted text-[13px]">Start typing notes to see extracted risk flags in real-time.</p>
             ) : (
               <div className="space-y-3 text-[13px]">
-                <p className="text-ic-text">Sentiment: <span className="font-medium">{preview.sentiment}</span></p>
-                <div><p className="font-medium text-ic-negative text-[12px]">Risk Factors</p><ul className="mt-1 space-y-1">{(preview.risk_factors || []).map((x: string, i: number) => (<li key={i} className="text-ic-warning text-[12px]">• {x}</li>))}</ul></div>
-                <div><p className="font-medium text-ic-positive text-[12px]">Positive Factors</p><ul className="mt-1 space-y-1">{(preview.positive_factors || []).map((x: string, i: number) => (<li key={i} className="text-ic-positive text-[12px]">• {x}</li>))}</ul></div>
-                <p className="text-ic-text">Suggested Adjustment: <span className="font-mono font-medium">{Number(preview.score_adjustment).toFixed(1)}</span></p>
+                <p className="text-ob-text">Sentiment: <span className="font-medium">{preview.sentiment}</span></p>
+                <div><p className="font-medium text-ob-warn text-[12px]">Risk Factors</p><ul className="mt-1 space-y-1">{(preview.risk_factors || []).map((x: string, i: number) => (<li key={i} className="text-ob-warn text-[12px]">• {x}</li>))}</ul></div>
+                <div><p className="font-medium text-ob-ok text-[12px]">Positive Factors</p><ul className="mt-1 space-y-1">{(preview.positive_factors || []).map((x: string, i: number) => (<li key={i} className="text-ob-ok text-[12px]">• {x}</li>))}</ul></div>
+                <p className="text-ob-text">Suggested Adjustment: <span className="font-mono font-medium">{Number(preview.score_adjustment).toFixed(1)}</span></p>
               </div>
             )}
           </div>
 
-          <div className="bg-ic-surface border border-ic-border rounded-[10px] p-5">
-            <p className="text-[10px] font-medium tracking-[0.12em] uppercase text-ic-muted mb-2.5">Tips</p>
-            <ul className="space-y-1.5 text-[12px] text-ic-muted">
+          <div className="bg-ob-glass border border-ob-edge rounded-[12px] p-[20px] backdrop-blur-[28px]">
+            <p className="font-mono text-[9px] font-normal tracking-[0.14em] uppercase text-ob-dim mb-2.5">Tips</p>
+            <ul className="space-y-1.5 text-[12px] text-ob-muted">
               <li>• Mention production volume and capacity utilization trends</li>
               <li>• Note any regulatory or environmental concerns</li>
               <li>• Describe management responsiveness and transparency</li>

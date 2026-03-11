@@ -31,7 +31,7 @@ RESEARCH_FINDING_SCHEMA = StructType(
         StructField("raw_content", StringType(), True),
         StructField("score_impact", DoubleType(), True),
         StructField("cam_section", StringType(), True),
-        StructField("firecrawl_job_id", StringType(), True),
+        StructField("research_job_id", StringType(), True),
         StructField("ingested_at", TimestampType(), False),
     ]
 )
