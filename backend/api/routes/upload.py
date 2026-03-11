@@ -4,6 +4,7 @@ Company registration and document upload endpoints.
 
 from __future__ import annotations
 
+import logging
 import os
 import uuid
 from typing import List
@@ -33,6 +34,10 @@ async def create_company(
         name=payload.name,
         cin=payload.cin,
         sector=payload.sector,
+        pan_number=payload.pan_number,
+        annual_turnover_cr=payload.annual_turnover_cr,
+        year_of_incorporation=payload.year_of_incorporation,
+        registered_address=payload.registered_address,
     )
     db.add(company)
     await db.commit()
@@ -114,6 +119,38 @@ async def upload_documents(
         )
 
     await db.commit()
+
+    # Auto-classify each uploaded document
+    logger = logging.getLogger(__name__)
+    for doc_info in saved:
+        try:
+            from backend.core.ingestion.document_classifier import classify_document
+            from backend.models.db_models import DocumentClassification
+
+            auto_type, confidence, reasoning = await classify_document(
+                file_path=doc_info["stored_path"],
+                filename=doc_info["filename"] or "unknown",
+            )
+            clf = DocumentClassification(
+                document_id=uuid.UUID(doc_info["document_id"]),
+                company_id=company_uuid,
+                auto_type=auto_type,
+                auto_confidence=confidence,
+                auto_reasoning=reasoning,
+                human_approved=None,
+            )
+            db.add(clf)
+            doc_info["classification"] = {
+                "auto_type": auto_type,
+                "confidence": confidence,
+                "reasoning": reasoning,
+            }
+        except Exception as exc:
+            logger.error(f"[Upload] Classification failed for {doc_info.get('filename')}: {exc}")
+            doc_info["classification"] = None
+
+    await db.commit()
+
     return build_response(
         {
             "company_id": company_id,
