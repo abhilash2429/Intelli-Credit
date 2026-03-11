@@ -6,10 +6,13 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
+import uuid
 from typing import Dict
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.deps import RequestContext, get_request_context
@@ -197,4 +200,63 @@ async def get_explanation(
         run.result_payload.get("explanation", {}),
         request_id=ctx.request_id,
         started_at=ctx.started_at,
+    )
+
+
+@router.get("/companies/{company_id}/swot")
+async def get_swot(
+    company_id: str,
+    db: AsyncSession = Depends(get_db),
+    ctx: RequestContext = Depends(get_request_context),
+):
+    from backend.models.db_models import SwotAnalysis
+
+    result = await db.execute(
+        select(SwotAnalysis)
+        .where(SwotAnalysis.company_id == uuid.UUID(company_id))
+        .order_by(SwotAnalysis.created_at.desc())
+        .limit(1)
+    )
+    swot = result.scalar_one_or_none()
+    if not swot:
+        raise HTTPException(404, "No SWOT analysis found. Run analysis pipeline first.")
+    return build_response(
+        {
+            "strengths": swot.strengths or [],
+            "weaknesses": swot.weaknesses or [],
+            "opportunities": swot.opportunities or [],
+            "threats": swot.threats or [],
+            "sector_outlook": swot.sector_outlook,
+            "macro_signals": swot.macro_signals or {},
+            "investment_thesis": swot.investment_thesis,
+            "recommendation": swot.recommendation,
+            "generated_at": swot.created_at.isoformat() if swot.created_at else None,
+        },
+        request_id=ctx.request_id,
+        started_at=ctx.started_at,
+    )
+
+
+@router.get("/companies/{company_id}/investment-report")
+async def download_investment_report(
+    company_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Generate and stream the investment report DOCX."""
+    from fastapi.responses import FileResponse
+
+    from backend.core.report.investment_report_generator import generate_investment_report
+
+    try:
+        path = await generate_investment_report(company_id=company_id, db=db)
+    except Exception as e:
+        raise HTTPException(500, f"Report generation failed: {e}")
+
+    if not os.path.exists(path):
+        raise HTTPException(500, "Report file not created")
+
+    return FileResponse(
+        path=path,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        filename=f"IntelliCredit_InvestmentReport_{company_id[:8]}.docx",
     )
