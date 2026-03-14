@@ -6,11 +6,13 @@ interface SwotItem {
   source: string;
 }
 
+type SwotInputItem = SwotItem | string;
+
 interface SwotMatrixProps {
-  strengths: SwotItem[];
-  weaknesses: SwotItem[];
-  opportunities: SwotItem[];
-  threats: SwotItem[];
+  strengths: SwotInputItem[];
+  weaknesses: SwotInputItem[];
+  opportunities: SwotInputItem[];
+  threats: SwotInputItem[];
   investmentThesis?: string;
   recommendation?: string;
   sectorOutlook?: string;
@@ -25,16 +27,22 @@ export default function SwotMatrix({
   recommendation,
   sectorOutlook,
 }: SwotMatrixProps) {
-  const renderItems = (items: SwotItem[], colorClass: string) =>
+  const renderItems = (items: SwotInputItem[], colorClass: string) =>
     items.map((item, i) => (
       <div key={i} className="mb-2.5 last:mb-0">
-        <p className={`text-[12px] font-medium ${colorClass}`}>{item.point}</p>
-        <p className="text-[11px] text-ob-muted mt-0.5 leading-relaxed">
-          {item.evidence}
-          {item.source && (
-            <span className="font-mono text-[10px] text-ob-dim ml-1">[{item.source}]</span>
-          )}
-        </p>
+        {typeof item === 'string' ? (
+          <p className={`text-[12px] font-medium ${colorClass}`}>{item}</p>
+        ) : (
+          <>
+            <p className={`text-[12px] font-medium ${colorClass}`}>{item.point}</p>
+            <p className="text-[11px] text-ob-muted mt-0.5 leading-relaxed">
+              {item.evidence}
+              {item.source && (
+                <span className="font-mono text-[10px] text-ob-dim ml-1">[{item.source}]</span>
+              )}
+            </p>
+          </>
+        )}
       </div>
     ));
 

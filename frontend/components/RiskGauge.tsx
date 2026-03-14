@@ -1,5 +1,7 @@
 'use client';
 
+import { formatRatio } from '@/lib/formatters';
+
 interface RiskGaugeProps {
   score: number;
   decision: string;
@@ -62,7 +64,7 @@ export default function RiskGauge({ score, decision, category }: RiskGaugeProps)
           fontSize="32"
           fontFamily="DM Serif Display, serif"
         >
-          {clampedScore.toFixed(1)}
+          {formatRatio(clampedScore, 1, '')}
         </text>
         <text
           x="150"

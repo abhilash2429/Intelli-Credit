@@ -5,6 +5,8 @@
 import axios from 'axios';
 
 const LOCAL_HOSTNAMES = new Set(['localhost', '127.0.0.1']);
+const DEFAULT_TIMEOUT_MS = 20000;
+const UPLOAD_TIMEOUT_MS = 240000;
 
 function normalizeBase(base: string): string {
   return String(base || '').replace(/\/+$/, '');
@@ -19,8 +21,8 @@ function inferInitialApiBase(): string {
   if (envBase) return normalizeBase(envBase);
 
   if (typeof window !== 'undefined' && isLocalHost(window.location.hostname)) {
-    // Docker compose maps backend to 8001 by default in this repo.
-    return 'http://localhost:8001';
+    // Prefer local uvicorn default first; retry logic can fall back to 8001.
+    return 'http://localhost:8000';
   }
 
   return 'http://localhost:8000';
@@ -65,7 +67,7 @@ function buildApiBaseCandidates(): string[] {
   return candidates;
 }
 
-const api = axios.create({ timeout: 180000 });
+const api = axios.create({ timeout: DEFAULT_TIMEOUT_MS });
 
 api.interceptors.request.use((config) => {
   if (!config.baseURL) {
@@ -113,6 +115,7 @@ api.interceptors.response.use(
         const retryConfig = {
           ...cfg,
           baseURL: base,
+          timeout: DEFAULT_TIMEOUT_MS,
           __baseRetryAttempted: true,
         };
         const response = await axios.request(retryConfig);
@@ -360,7 +363,10 @@ export async function uploadDocumentsV1(
   const { data } = await api.post<APIEnvelope<any>>(
     `/api/v1/companies/${companyId}/documents`,
     formData,
-    { headers: { 'Content-Type': 'multipart/form-data' } }
+    {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: UPLOAD_TIMEOUT_MS,
+    }
   );
   return data;
 }

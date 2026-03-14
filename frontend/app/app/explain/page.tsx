@@ -38,6 +38,9 @@ export default function ExplainPage() {
 
   const fraudNodes = useMemo(() => result?.fraud_graph?.nodes || [], [result]);
   const fraudLinks = useMemo(() => result?.fraud_graph?.links || [], [result]);
+  const weakAssociations = useMemo(() => result?.fraud_graph?.weak_associations || [], [result]);
+  const fraudEntityCount = useMemo(() => result?.fraud_graph?.entity_count, [result]);
+  const fraudConnectionCount = useMemo(() => result?.fraud_graph?.connection_count, [result]);
 
   const shapData = Object.entries(explain?.shap_waterfall_data || {}).map(([feature, value]) => ({
     feature,
@@ -73,7 +76,13 @@ export default function ExplainPage() {
 
           {/* Fraud Graph — only shown if real data exists */}
           {fraudNodes.length > 0 && (
-            <FraudGraph nodes={fraudNodes} links={fraudLinks} />
+            <FraudGraph
+              nodes={fraudNodes}
+              links={fraudLinks}
+              weakAssociations={weakAssociations}
+              entityCount={fraudEntityCount}
+              connectionCount={fraudConnectionCount}
+            />
           )}
         </div>
 

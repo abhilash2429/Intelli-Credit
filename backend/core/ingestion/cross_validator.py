@@ -218,89 +218,143 @@ class CrossValidator:
     def build_fraud_graph(
         *,
         company_name: str,
+        extracted_data: Optional[Dict[str, Any]] = None,
         bank_metrics: Optional[BankStatementMetrics] = None,
         research_findings: Optional[list] = None,
         gst_mismatch: Optional[MismatchReport] = None,
     ) -> Dict[str, Any]:
         """
-        Build fraud fingerprinting graph with multi-signal corroboration.
-        An edge requires AT LEAST TWO corroborating signals.
+        Build relationship-first graph from extracted entities.
+        Includes promoters, subsidiaries, and charge holders/lenders.
         """
-        nodes = [{"id": company_name, "type": "company"}]
-        links = []
-        entity_signals: Dict[str, list] = {}  # entity -> list of signal sources
+        data = extracted_data or {}
+        nodes: List[Dict[str, Any]] = [
+            {
+                "id": "main",
+                "label": company_name,
+                "type": "company",
+                "risk": "LOW",
+            }
+        ]
+        links: List[Dict[str, Any]] = []
 
-        # Signal 1: Bank statement circular pairs
-        if bank_metrics and bank_metrics.circular_credit_debit_pairs:
-            for txn in bank_metrics.circular_credit_debit_pairs:
-                party = txn.party
-                if party and party.lower() != "unknown":
-                    entity_signals.setdefault(party, []).append("bank_circular_pair")
+        promoters = data.get("promoters", []) or []
+        for i, promoter in enumerate(promoters):
+            node_id = f"promoter_{i}"
+            pledge_pct = float(promoter.get("pledge_pct", 0.0) or 0.0)
+            risk_level = "HIGH" if pledge_pct > 75 else ("MEDIUM" if pledge_pct > 25 else "LOW")
+            nodes.append(
+                {
+                    "id": node_id,
+                    "label": str(promoter.get("name", f"Promoter {i + 1}")),
+                    "type": "counterparty",
+                    "risk": risk_level,
+                }
+            )
+            holding_pct = float(promoter.get("holding_pct", 0.0) or 0.0)
+            label = f"{holding_pct:.1f}% holding"
+            links.append(
+                {
+                    "source": "main",
+                    "target": node_id,
+                    "value": 20,
+                    "confidence": risk_level,
+                    "label": label,
+                }
+            )
 
-        # Signal 2: Bank statement shell transfers
-        if bank_metrics and bank_metrics.suspected_shell_company_transfers:
-            for transfer in bank_metrics.suspected_shell_company_transfers:
-                # Extract party name from transfer string
-                parts = transfer.split(" to ")
-                if len(parts) > 1:
-                    party = parts[-1].strip()
-                    entity_signals.setdefault(party, []).append("shell_transfer")
-
-        # Signal 3: Research findings mentioning entities
-        for finding in (research_findings or []):
-            snippet = ""
-            if hasattr(finding, "raw_snippet"):
-                snippet = finding.raw_snippet
-            elif isinstance(finding, dict):
-                snippet = finding.get("raw_snippet", "")
-            summary = ""
-            if hasattr(finding, "summary"):
-                summary = finding.summary  # type: ignore[reportAttributeAccessIssue]
-            elif isinstance(finding, dict):
-                summary = finding.get("summary", "")
-
-            combined = f"{summary} {snippet}".lower()
-            # Only extract entities that are explicitly named subsidiaries/parent
-            if company_name.lower() in combined:
-                for keyword in ["parent", "subsidiary", "group company", "holding company"]:
-                    if keyword in combined:
-                        # The research finding itself is evidence
-                        severity = getattr(finding, "severity", None)
-                        if severity and str(severity) in ("CRITICAL", "HIGH"):
-                            source_name = getattr(finding, "source_name", "") or (finding.get("source_name", "") if isinstance(finding, dict) else "")
-                            entity_signals.setdefault(source_name or "Related Entity", []).append("research_finding")
-
-        # Signal 4: GST circular trading entities
-        if gst_mismatch and gst_mismatch.suspected_circular_trading:
-            entity_signals.setdefault("GST Circular Trading Party", []).append("gst_circular")
-
-        # Build edges only for entities with 2+ signals (MEDIUM+ confidence)
-        weak_associations = []
-        for entity, signals in entity_signals.items():
-            unique_signals = list(set(signals))
-            confidence_level = "LOW" if len(unique_signals) < 2 else ("MEDIUM" if len(unique_signals) == 2 else "HIGH")
-            node = {"id": entity, "type": "counterparty"}
-
-            if len(unique_signals) >= 2:
-                # Confirmed edge
-                nodes.append(node)
-                links.append({
-                    "source": company_name,
-                    "target": entity,
-                    "value": len(unique_signals) * 20,
-                    "confidence": confidence_level,
-                    "signals": unique_signals,
-                })
-            else:
-                weak_associations.append({
-                    "entity": entity,
-                    "signal": unique_signals[0] if unique_signals else "unknown",
+        subsidiaries = data.get("subsidiaries", []) or []
+        for i, sub in enumerate(subsidiaries):
+            node_id = f"sub_{i}"
+            nodes.append(
+                {
+                    "id": node_id,
+                    "label": str(sub.get("name", f"Subsidiary {i + 1}")),
+                    "type": "counterparty",
+                    "risk": "LOW",
+                }
+            )
+            links.append(
+                {
+                    "source": "main",
+                    "target": node_id,
+                    "value": 18,
                     "confidence": "LOW",
-                })
+                    "label": str(sub.get("relationship", "Subsidiary")),
+                }
+            )
 
+        charges = data.get("mca_charges", []) or []
+        for i, charge in enumerate(charges[:3]):
+            node_id = f"lender_{i}"
+            holder = str(charge.get("holder", f"Lender {i + 1}"))
+            amount_cr = float(charge.get("amount_cr", 0.0) or 0.0)
+            nodes.append(
+                {
+                    "id": node_id,
+                    "label": holder,
+                    "type": "counterparty",
+                    "risk": "LOW",
+                }
+            )
+            links.append(
+                {
+                    "source": "main",
+                    "target": node_id,
+                    "value": 16,
+                    "confidence": "LOW",
+                    "label": f"\u20b9{amount_cr:.2f} Cr charge",
+                }
+            )
+
+        # Legacy weak association support (still used by UI disclosure block)
+        weak_associations: List[Dict[str, Any]] = []
+        if not links and bank_metrics and bank_metrics.suspected_shell_company_transfers:
+            for transfer in bank_metrics.suspected_shell_company_transfers[:5]:
+                weak_associations.append(
+                    {
+                        "entity": transfer,
+                        "signal": "shell_transfer",
+                        "confidence": "LOW",
+                    }
+                )
+        if gst_mismatch and gst_mismatch.suspected_circular_trading:
+            weak_associations.append(
+                {
+                    "entity": "GST Circular Trading Party",
+                    "signal": "gst_circular",
+                    "confidence": "LOW",
+                }
+            )
+        if research_findings and not links:
+            for finding in research_findings[:3]:
+                source_name = getattr(finding, "source_name", None) or (
+                    finding.get("source_name") if isinstance(finding, dict) else None
+                )
+                if source_name:
+                    weak_associations.append(
+                        {
+                            "entity": str(source_name),
+                            "signal": "research_finding",
+                            "confidence": "LOW",
+                        }
+                    )
+
+        # Compatibility: provide `edges` and explicit counters, while retaining `links`.
+        edges = [
+            {
+                "from": link["source"],
+                "to": link["target"],
+                "label": link.get("label", ""),
+            }
+            for link in links
+        ]
         return {
             "nodes": nodes,
             "links": links,
+            "edges": edges,
+            "entity_count": len(nodes),
+            "connection_count": len(links),
             "weak_associations": weak_associations,
         }
 

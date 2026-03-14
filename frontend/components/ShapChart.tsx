@@ -10,6 +10,7 @@ import {
   Cell,
   ReferenceLine,
 } from 'recharts';
+import { formatRatio } from '@/lib/formatters';
 
 interface ShapEntry {
   feature: string;
@@ -57,7 +58,7 @@ export default function ShapChart({ data }: { data: ShapEntry[] }) {
             width={150}
           />
           <Tooltip
-            formatter={(value: number) => value.toFixed(3)}
+            formatter={(value: number) => formatRatio(value, 3, '')}
             contentStyle={{
               backgroundColor: 'var(--ob-surface)',
               border: '1px solid var(--ob-edge)',

@@ -1,180 +1,198 @@
 """
-SWOT Analysis Engine.
-Generates evidence-backed SWOT from extracted financials + research findings + sector context.
+Deterministic SWOT analysis engine.
 """
+
 from __future__ import annotations
 
-import asyncio
-import json
-import logging
-import re
+from typing import Any, Dict
 
-logger = logging.getLogger(__name__)
-
-_SWOT_PROMPT = """\
-You are a senior credit analyst at a top Indian investment bank.
-Generate a structured SWOT analysis for this loan/investment decision.
-
-COMPANY: {company_name}
-SECTOR: {sector}
-LOAN: ₹{loan_amount_cr} Cr {loan_type} | Tenure: {tenure_months} months
-
-KEY FINANCIAL METRICS:
-{financials}
-
-RESEARCH FINDINGS:
-{research}
-
-SECTOR / MACRO CONTEXT:
-{macro}
-
-RULES (strictly follow):
-1. Every SWOT point MUST cite a specific number or fact from the data above.
-2. Generic points like "experienced management" with no evidence are FORBIDDEN.
-3. Minimum 3 points per quadrant, maximum 5.
-4. Opportunities and Threats should reference sector/macro context, not just company data.
-
-Reply ONLY with this JSON — no markdown, no extra text:
-{{
-  "strengths": [
-    {{"point": "<specific claim>", "evidence": "<exact number or fact>", "source": "<document type>"}}
-  ],
-  "weaknesses": [
-    {{"point": "<specific claim>", "evidence": "<exact number or fact>", "source": "<document type>"}}
-  ],
-  "opportunities": [
-    {{"point": "<specific claim>", "evidence": "<macro/sector fact>", "source": "Sector Research"}}
-  ],
-  "threats": [
-    {{"point": "<specific claim>", "evidence": "<risk factor>", "source": "Research / Market"}}
-  ],
-  "sector_outlook": "<2-3 sentences on sector and macro context>",
-  "macro_signals": {{
-    "rbi_repo_rate_pct": <float or null>,
-    "india_gdp_growth_pct": <float or null>,
-    "sector_credit_growth_pct": <float or null>,
-    "inflation_cpi_pct": <float or null>
-  }},
-  "investment_thesis": "<1 sentence summary of the credit case>",
-  "recommendation": "<2-3 sentence overall recommendation>"
-}}
-"""
-
-_MACRO_PROMPT = """\
-Provide current (early 2026) sector and macro context for an Indian {sector} company.
-
-Cover briefly:
-1. RBI repo rate (as of early 2026)
-2. India GDP growth rate
-3. {sector} sector growth trends and headwinds
-4. Key regulatory risks for {sector}
-5. Competitive landscape signals
-
-Be concise and factual. Focus on what matters for a credit/investment decision.
-"""
+from backend.core.formatting import format_currency_cr, format_percentage, format_ratio
 
 
-async def generate_swot(
-    company_name: str,
-    sector: str,
-    loan_amount_cr: float,
-    loan_type: str,
-    tenure_months: int,
-    extracted_financials: dict,
-    research_findings: list,
-) -> dict:
-    from backend.core.llm.llm_client import llm_call
+def generate_swot(extracted_data: dict, grade: str, score: float) -> dict:
+    """
+    extracted_data: dict of all extracted fields from documents
+    grade: credit grade string e.g. 'AA-'
+    score: normalized score 0-100
+    """
+    strengths = []
+    weaknesses = []
+    opportunities = []
+    threats = []
 
-    # Step 1: Sector macro context
-    try:
-        macro_resp = await asyncio.to_thread(
-            llm_call,
-            prompt=_MACRO_PROMPT.format(sector=sector),
-            task="research",
+    # ── STRENGTHS ──
+    pledge = extracted_data.get("promoter_pledge_pct", -1)
+    if pledge == 0:
+        strengths.append("Zero promoter pledge - shares fully unencumbered")
+    elif 0 < pledge <= 20:
+        strengths.append(f"Low promoter pledge at {format_percentage(pledge)}")
+
+    rating_action = extracted_data.get("crisil_rating_action", "")
+    rating = extracted_data.get("crisil_rating", "")
+    if rating_action == "UPGRADED" and rating:
+        strengths.append(f"Credit rating upgraded to {rating} - improving profile")
+    elif rating in ["AAA", "AA+", "AA", "AA-", "A+", "A"]:
+        strengths.append(f"Investment grade rating: {rating}")
+
+    ebitda_margin = extracted_data.get("ebitda_margin_pct", 0)
+    if ebitda_margin > 20:
+        strengths.append(
+            f"Strong EBITDA margin of {format_percentage(ebitda_margin)} (sector benchmark ~15%)"
         )
-        macro_text = macro_resp.text if hasattr(macro_resp, "text") else str(macro_resp)
-    except Exception:
-        macro_text = "Macro data unavailable."
 
-    # Step 2: Build prompt
-    financials_str = _format_financials(extracted_financials)
-    research_str = _format_research(research_findings)
+    interest_cov = extracted_data.get("interest_coverage_ratio", 0)
+    if interest_cov > 5:
+        strengths.append(f"Comfortable interest coverage of {format_ratio(interest_cov, decimals=1)}")
 
-    prompt = _SWOT_PROMPT.format(
-        company_name=company_name,
-        sector=sector,
-        loan_amount_cr=loan_amount_cr,
-        loan_type=loan_type,
-        tenure_months=tenure_months,
-        financials=financials_str,
-        research=research_str,
-        macro=macro_text[:2000],
-    )
+    de_ratio = extracted_data.get("de_ratio", None)
+    if isinstance(de_ratio, (int, float)) and de_ratio < 0.5:
+        strengths.append(f"Conservative leverage at D/E {format_ratio(de_ratio)}")
 
-    # Step 3: Generate
-    try:
-        result = await asyncio.to_thread(llm_call, prompt=prompt, task="cam_narrative")
-        raw_text = result.text if hasattr(result, "text") else str(result)
-        cleaned = re.sub(r"```json|```", "", raw_text).strip()
-        return json.loads(cleaned)
-    except Exception as e:
-        logger.error(f"SWOT generation failed: {e}")
-        return {
-            "strengths": [],
-            "weaknesses": [],
-            "opportunities": [],
-            "threats": [],
-            "sector_outlook": "Analysis unavailable — run analysis pipeline first.",
-            "macro_signals": {},
-            "investment_thesis": "Insufficient data",
-            "recommendation": "Manual review required.",
-        }
+    revenue_cagr = extracted_data.get("revenue_cagr_3yr", 0)
+    if revenue_cagr > 12:
+        strengths.append(f"Revenue CAGR of {format_percentage(revenue_cagr)} over 3 years")
+
+    gst_mismatch = extracted_data.get("gst_mismatch_pct", 100)
+    if gst_mismatch == 0:
+        strengths.append("GST reconciliation clean - 0% mismatch, no circular trading")
+
+    # ── WEAKNESSES ──
+    customer_conc = extracted_data.get("customer_concentration_top5_pct", 0)
+    if customer_conc > 50:
+        weaknesses.append(
+            f"Customer concentration risk - top 5 = {format_percentage(customer_conc)} of revenue"
+        )
+
+    if isinstance(de_ratio, (int, float)) and de_ratio > 1.5:
+        weaknesses.append(f"Elevated leverage at D/E {format_ratio(de_ratio)}")
+
+    current_ratio = extracted_data.get("current_ratio", 0)
+    if 1.0 < current_ratio < 1.3:
+        weaknesses.append(f"Tight current ratio of {format_ratio(current_ratio)}")
+
+    pat_margin = extracted_data.get("pat_margin_pct", 0)
+    if 0 < pat_margin < 7:
+        weaknesses.append(f"Thin PAT margin of {format_percentage(pat_margin)}")
+
+    # ── OPPORTUNITIES ──
+    ev_loi = extracted_data.get("ev_loi_cr", 0)
+    if ev_loi > 0:
+        opportunities.append(f"EV component LoIs worth {format_currency_cr(ev_loi)} secured from OEMs")
+
+    export_growth = extracted_data.get("export_growth_pct", 0)
+    if export_growth > 15:
+        opportunities.append(
+            f"Export revenues growing {format_percentage(export_growth)} - international expansion"
+        )
+
+    capex_irr = extracted_data.get("expansion_irr_pct", 0)
+    if capex_irr > 15:
+        opportunities.append(f"Approved capacity expansion with IRR of {format_percentage(capex_irr)}")
+
+    strategic_partner = extracted_data.get("strategic_partnership_mentioned", "")
+    if strategic_partner:
+        opportunities.append(f"Strategic partnership discussions with {strategic_partner}")
+
+    # ── THREATS ──
+    litigation_cr = extracted_data.get("total_litigation_exposure_cr", 0)
+    net_worth_cr = extracted_data.get("net_worth_cr", 1)
+    if net_worth_cr and litigation_cr > net_worth_cr * 0.5:
+        threats.append(
+            f"Litigation exposure {format_currency_cr(litigation_cr)} = "
+            f"{format_ratio(litigation_cr / net_worth_cr, decimals=1)} net worth"
+        )
+    elif litigation_cr > 0:
+        threats.append(f"Contingent liabilities of {format_currency_cr(litigation_cr)} under appeal")
+
+    commodity_risk = extracted_data.get("commodity_price_risk", False)
+    if commodity_risk:
+        threats.append("Input cost volatility from commodity price movements")
+
+    pledge = extracted_data.get("promoter_pledge_pct", 0)
+    if pledge > 75:
+        threats.append(
+            f"Promoter pledge {format_percentage(pledge)} - forced selling risk if share price falls"
+        )
+
+    parent_risk = extracted_data.get("parent_debt_risk", False)
+    if parent_risk:
+        threats.append("Parent company debt obligations may require dividend upstreaming")
+
+    # ── FALLBACKS ──
+    if not strengths:
+        strengths = [f"Score of {score:.0f}/100 indicates acceptable credit quality"]
+    if not weaknesses:
+        weaknesses = ["No material weaknesses identified from available documents"]
+    if not opportunities:
+        opportunities = ["Sector growth trajectory supports future revenue expansion"]
+    if not threats:
+        threats = ["Standard macro and sector risks apply"]
+
+    return {
+        "strengths": strengths,
+        "weaknesses": weaknesses,
+        "opportunities": opportunities,
+        "threats": threats,
+        "investment_thesis": (
+            f"{extracted_data.get('company_name', 'Company')} is rated {grade} "
+            f"with a credit score of {score:.0f}/100. "
+            f"{'Strong fundamentals support full approval.' if score >= 75 else 'Conditional approval recommended with covenants.'}"
+        ),
+    }
 
 
-def _format_financials(data: dict) -> str:
-    KEY_FIELDS = [
-        ("revenue_crore", "Revenue (₹Cr)"),
-        ("ebitda_margin_pct", "EBITDA Margin %"),
-        ("ebitda_margin", "EBITDA Margin %"),
-        ("pat_crore", "PAT (₹Cr)"),
-        ("de_ratio", "D/E Ratio"),
-        ("debt_equity_ratio", "D/E Ratio"),
-        ("current_ratio", "Current Ratio"),
-        ("dscr", "DSCR"),
-        ("interest_coverage", "Interest Coverage"),
-        ("interest_coverage_ratio", "Interest Coverage"),
-        ("promoter_holding_pct", "Promoter Holding %"),
-        ("total_pledged_pct", "Pledged %"),
-        ("gnpa_pct", "GNPA %"),
-        ("collection_efficiency_pct", "Collection Efficiency %"),
-        ("aum_cr", "AUM (₹Cr)"),
-        ("total_outstanding_cr", "Total Debt Outstanding (₹Cr)"),
-        ("structural_liquidity_gap_cr", "ALM Liquidity Gap (₹Cr)"),
-    ]
-    lines = []
-    seen_labels = set()
-    for key, label in KEY_FIELDS:
-        val = data.get(key)
-        if val is not None and label not in seen_labels:
-            lines.append(f"  {label}: {val}")
-            seen_labels.add(label)
-    return "\n".join(lines) or "  No extracted financial data available."
+def build_swot_extracted_data(
+    *,
+    company_name: str,
+    financials: Dict[str, Any],
+    features: Dict[str, float],
+    shareholding_data: Dict[str, Any],
+    gst_payload: Dict[str, Any],
+    research_summary: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Build extracted_data payload expected by generate_swot."""
+    gst_mismatch = gst_payload.get("mismatch_report")
+    if hasattr(gst_mismatch, "itc_inflation_percentage"):
+        gst_mismatch_pct = float(getattr(gst_mismatch, "itc_inflation_percentage", 0.0))
+    elif isinstance(gst_mismatch, dict):
+        gst_mismatch_pct = float(gst_mismatch.get("itc_inflation_percentage", 0.0) or 0.0)
+    else:
+        gst_mismatch_pct = 0.0
 
-
-def _format_research(findings: list) -> str:
-    if not findings:
-        return "  No adverse research findings."
-    out = []
-    for f in findings[:12]:
-        if hasattr(f, "severity"):
-            severity = f.severity
-            summary = f.summary
-            source = getattr(f, "source_name", "Web")
-        elif isinstance(f, dict):
-            severity = f.get("severity", "LOW")
-            summary = f.get("summary", "")
-            source = f.get("source_name", "Web")
-        else:
-            continue
-        out.append(f"  [{severity}] {summary} (Source: {source})")
-    return "\n".join(out)
+    return {
+        "company_name": company_name,
+        "promoter_pledge_pct": float(
+            shareholding_data.get("total_pledged_pct", shareholding_data.get("promoter_pledge_pct", 0.0)) or 0.0
+        ),
+        "crisil_rating_action": financials.get("crisil_rating_action", ""),
+        "crisil_rating": financials.get("crisil_rating", ""),
+        "ebitda_margin_pct": float(financials.get("ebitda_margin_pct", financials.get("ebitda_margin", 0.0)) or 0.0),
+        "interest_coverage_ratio": float(financials.get("interest_coverage_ratio", 0.0) or 0.0),
+        "de_ratio": (
+            float(financials.get("de_ratio"))
+            if financials.get("de_ratio") not in (None, "")
+            else (
+                float(financials.get("debt_equity_ratio"))
+                if financials.get("debt_equity_ratio") not in (None, "")
+                else None
+            )
+        ),
+        "revenue_cagr_3yr": float(features.get("revenue_cagr_3yr", 0.0) or 0.0),
+        "gst_mismatch_pct": gst_mismatch_pct,
+        "customer_concentration_top5_pct": float(financials.get("customer_concentration_top5_pct", 0.0) or 0.0),
+        "current_ratio": float(financials.get("current_ratio", 0.0) or 0.0),
+        "pat_margin_pct": float(financials.get("pat_margin_pct", 0.0) or 0.0),
+        "ev_loi_cr": float(financials.get("ev_loi_cr", 0.0) or 0.0),
+        "export_growth_pct": float(financials.get("export_growth_pct", 0.0) or 0.0),
+        "expansion_irr_pct": float(financials.get("expansion_irr_pct", 0.0) or 0.0),
+        "strategic_partnership_mentioned": financials.get("strategic_partnership_mentioned", ""),
+        "total_litigation_exposure_cr": float(
+            financials.get("total_litigation_exposure_cr", financials.get("total_contingent_liabilities", 0.0)) or 0.0
+        ),
+        "net_worth_cr": float(financials.get("net_worth_cr", financials.get("net_worth_crore", 1.0)) or 1.0),
+        "commodity_price_risk": bool(research_summary.get("sector_headwinds", False)),
+        "parent_debt_risk": bool(research_summary.get("parent_debt_risk", False)),
+        "has_mca_struck_off_associates": int(research_summary.get("mca_struck_off_count", 0) or 0) > 0,
+        "has_nclt_proceedings": bool(research_summary.get("has_nclt", False)),
+        "due_diligence_risk_adjustment": float(features.get("due_diligence_risk_adjustment", 0.0) or 0.0),
+    }

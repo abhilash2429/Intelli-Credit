@@ -5,6 +5,7 @@ End-to-end analysis pipeline service.
 from __future__ import annotations
 
 import asyncio
+import re
 import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
@@ -234,50 +235,6 @@ class IntelliCreditPipeline:
             cam_narrative=research_narrative,
         )
 
-        # ── SWOT Generation ──────────────────────────────────────────
-        await update_run(
-            db,
-            run,
-            step="SWOT_ANALYSIS",
-            progress_pct=65,
-            message="Generating SWOT analysis from financials and research",
-        )
-        loan_result = await db.execute(
-            select(LoanApplication)
-            .where(LoanApplication.company_id == uuid.UUID(company_id))
-            .order_by(LoanApplication.created_at.desc())
-            .limit(1)
-        )
-        loan_app = loan_result.scalar_one_or_none()
-        try:
-            from backend.core.research.swot_engine import generate_swot
-
-            swot_result = await generate_swot(
-                company_name=company.name,  # type: ignore[reportArgumentType]
-                sector=company.sector or "other",  # type: ignore[reportArgumentType]
-                loan_amount_cr=float(loan_app.loan_amount_cr if loan_app else 30.0),  # type: ignore[reportArgumentType]
-                loan_type=loan_app.loan_type if loan_app else "term_loan",  # type: ignore[reportArgumentType]
-                tenure_months=int(loan_app.tenure_months if loan_app else 36),  # type: ignore[reportArgumentType]
-                extracted_financials=parsed_financials.get("financials", {}),
-                research_findings=research_bundle.findings,
-            )
-            swot_record = SwotAnalysis(
-                company_id=uuid.UUID(company_id),
-                strengths=swot_result.get("strengths", []),
-                weaknesses=swot_result.get("weaknesses", []),
-                opportunities=swot_result.get("opportunities", []),
-                threats=swot_result.get("threats", []),
-                sector_outlook=swot_result.get("sector_outlook"),
-                macro_signals=swot_result.get("macro_signals", {}),
-                investment_thesis=swot_result.get("investment_thesis"),
-                recommendation=swot_result.get("recommendation"),
-            )
-            db.add(swot_record)
-            await db.flush()
-            logger.info("pipeline.swot_generated", company=company.name)
-        except Exception as exc:
-            logger.warning("pipeline.swot_generation_failed", error=str(exc))
-
         await update_run(
             db,
             run,
@@ -324,10 +281,64 @@ class IntelliCreditPipeline:
             self.scorer.predict,
             features,
             requested_loan_amount=float(getattr(company, "loan_amount_requested", 30.0) or 30.0),
+            annual_revenue_cr=float(
+                parsed_financials.get("financials", {}).get("annual_revenue_cr")
+                or parsed_financials.get("financials", {}).get("revenue_crore")
+                or (
+                    (parsed_financials.get("financials", {}).get("revenue_figures") or [{}])[0].get("amount")
+                    if parsed_financials.get("financials", {}).get("revenue_figures")
+                    else 0.0
+                )
+                or getattr(company, "annual_turnover_cr", 0.0)
+                or 0.0
+            ),
+            form_turnover_cr=float(getattr(company, "annual_turnover_cr", 100.0) or 100.0),
             sector=company.sector or "other",  # type: ignore[reportArgumentType]
             loan_type="secured",
         )
         explanation = await asyncio.to_thread(self.explainer.generate_explanation, features)
+
+        # ── SWOT Generation (post-score to use grade + normalized score) ──
+        await update_run(
+            db,
+            run,
+            step="SWOT_ANALYSIS",
+            progress_pct=85,
+            message="Generating deterministic SWOT from extracted signals",
+        )
+        try:
+            from backend.core.research.swot_engine import build_swot_extracted_data, generate_swot
+
+            swot_input = build_swot_extracted_data(
+                company_name=str(company.name or "Company"),
+                financials=parsed_financials.get("financials", {}),
+                features=features,
+                shareholding_data=shareholding_data,
+                gst_payload=gst_payload,
+                research_summary=research_summary,
+            )
+            normalized_score = max(0.0, min(100.0, (float(decision.credit_score) - 300.0) / 6.0))
+            swot_result = generate_swot(
+                extracted_data=swot_input,
+                grade=str(decision.risk_grade),
+                score=normalized_score,
+            )
+            swot_record = SwotAnalysis(
+                company_id=uuid.UUID(company_id),
+                strengths=swot_result.get("strengths", []),
+                weaknesses=swot_result.get("weaknesses", []),
+                opportunities=swot_result.get("opportunities", []),
+                threats=swot_result.get("threats", []),
+                sector_outlook=swot_result.get("sector_outlook"),
+                macro_signals=swot_result.get("macro_signals", {}),
+                investment_thesis=swot_result.get("investment_thesis"),
+                recommendation=swot_result.get("recommendation"),
+            )
+            db.add(swot_record)
+            await db.flush()
+            logger.info("pipeline.swot_generated", company=company.name)
+        except Exception as exc:
+            logger.warning("pipeline.swot_generation_failed", error=str(exc))
 
         await update_run(
             db,
@@ -360,7 +371,7 @@ class IntelliCreditPipeline:
         risk_record = RiskScore(
             id=uuid.uuid4(),
             company_id=uuid.UUID(company_id),
-            rule_based_score=max(0.0, min(100.0, (decision.credit_score - 300) / 6)),
+            rule_based_score=float(decision.normalized_score),
             ml_stress_probability=max(0.0, min(1.0, (900 - decision.credit_score) / 600)),
             final_risk_score=decision.credit_score,
             risk_category=decision.risk_grade,
@@ -369,7 +380,7 @@ class IntelliCreditPipeline:
             shap_values=explanation.shap_waterfall_data,
             decision=decision.recommendation,
             recommended_limit_crore=decision.recommended_loan_amount,
-            interest_premium_bps=int(max(0.0, (decision.recommended_interest_rate - 8.5) * 100)),
+            interest_premium_bps=int(decision.interest_premium_bps),
             decision_rationale=explanation.decision_narrative,
         )
         db.add(risk_record)
@@ -395,8 +406,16 @@ class IntelliCreditPipeline:
         model_confidence_pct = round(agreement * 100, 1)
 
         # Build fraud fingerprinting graph with multi-signal corroboration
+        fraud_graph_input = self._build_fraud_graph_input(
+            shareholding_data=parsed_financials.get("shareholding_data", {}),
+            financials=parsed_financials.get("financials", {}),
+            findings=research_bundle.findings,
+            mca_report=research_bundle.mca_report,
+            due_payload=due_raw_payload,
+        )
         fraud_graph = self.cross_validator.build_fraud_graph(
             company_name=company.name,  # type: ignore[reportArgumentType]
+            extracted_data=fraud_graph_input,
             bank_metrics=bank_metrics,
             research_findings=research_bundle.findings,
             gst_mismatch=gst_payload.get("mismatch_report"),
@@ -413,6 +432,7 @@ class IntelliCreditPipeline:
             else None,
             "gst_xlsx_data": gst_xlsx_data,
             "shareholding_data": shareholding_data,
+            "fraud_graph_input": fraud_graph_input,
             "fraud_graph": fraud_graph,
             "five_cs": five_cs,
             "model_confidence": f"{model_confidence_pct}% agreement between rule and ML subsystems",
@@ -667,6 +687,142 @@ class IntelliCreditPipeline:
             "mismatch_report": mismatch_report,
             "filing_consistency_pct": 91.0,
         }
+
+    @staticmethod
+    def _build_fraud_graph_input(
+        *,
+        shareholding_data: Dict[str, Any],
+        financials: Dict[str, Any],
+        findings: List[Any],
+        mca_report: Any,
+        due_payload: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        promoters = IntelliCreditPipeline._extract_promoter_entities(shareholding_data, due_payload)
+        subsidiaries = IntelliCreditPipeline._extract_subsidiaries(financials, findings)
+        mca_charges = IntelliCreditPipeline._extract_lenders(financials, mca_report)
+        return {
+            "promoters": promoters,
+            "subsidiaries": subsidiaries,
+            "mca_charges": mca_charges,
+        }
+
+    @staticmethod
+    def _extract_promoter_entities(
+        shareholding_data: Dict[str, Any],
+        due_payload: Dict[str, Any],
+    ) -> List[Dict[str, Any]]:
+        promoters: List[Dict[str, Any]] = []
+        top_shareholders = shareholding_data.get("top_shareholders", []) or []
+        for holder in top_shareholders:
+            if not isinstance(holder, dict):
+                continue
+            name = str(holder.get("name", "")).strip()
+            if not name:
+                continue
+            promoters.append(
+                {
+                    "name": name,
+                    "holding_pct": float(holder.get("percentage", holder.get("holding_pct", 0.0)) or 0.0),
+                    "pledge_pct": float(
+                        holder.get(
+                            "pledge_pct",
+                            shareholding_data.get("total_pledged_pct", shareholding_data.get("promoter_pledge_pct", 0.0)),
+                        )
+                        or 0.0
+                    ),
+                }
+            )
+        if not promoters and shareholding_data.get("promoter_holding_pct") is not None:
+            promoters.append(
+                {
+                    "name": "Promoter Group",
+                    "holding_pct": float(shareholding_data.get("promoter_holding_pct", 0.0) or 0.0),
+                    "pledge_pct": float(
+                        shareholding_data.get("total_pledged_pct", shareholding_data.get("promoter_pledge_pct", 0.0))
+                        or 0.0
+                    ),
+                }
+            )
+
+        # Borrower-provided KMP names can enrich graph if shareholder list was not extracted.
+        if not promoters:
+            for person in due_payload.get("key_management_persons", []) or []:
+                if isinstance(person, dict) and person.get("name"):
+                    promoters.append({"name": str(person["name"]), "holding_pct": 0.0, "pledge_pct": 0.0})
+        return promoters[:8]
+
+    @staticmethod
+    def _extract_subsidiaries(financials: Dict[str, Any], findings: List[Any]) -> List[Dict[str, Any]]:
+        candidates: List[str] = []
+        related = financials.get("related_party_transactions", []) or []
+        if isinstance(related, list):
+            candidates.extend([str(x) for x in related if x])
+
+        for finding in findings:
+            summary = getattr(finding, "summary", "") if not isinstance(finding, dict) else finding.get("summary", "")
+            snippet = getattr(finding, "raw_snippet", "") if not isinstance(finding, dict) else finding.get("raw_snippet", "")
+            combined = f"{summary} {snippet}".strip()
+            if combined:
+                candidates.append(combined)
+
+        org_pattern = re.compile(
+            r"\b([A-Z][A-Za-z0-9&.,()\- ]{2,90}(?:Pvt\.?\s*Ltd\.?|Private Limited|Limited|Ltd\.?|LLP|FZE|GmbH))\b"
+        )
+        subsidiaries: List[Dict[str, Any]] = []
+        seen: set[str] = set()
+        for text in candidates:
+            low = text.lower()
+            has_relation_keyword = any(
+                k in low for k in ("subsidiary", "associate", "group company", "joint venture", "wholly owned")
+            )
+            has_entity_hint = any(k in low for k in ("gmbh", "fze", "pvt ltd", "limited", "llp"))
+            if not has_relation_keyword and not has_entity_hint:
+                continue
+            for match in org_pattern.findall(text):
+                name = " ".join(match.split())
+                key = name.lower()
+                if key in seen:
+                    continue
+                seen.add(key)
+                relationship = "Subsidiary"
+                if "associate" in low:
+                    relationship = "Associate"
+                elif "joint venture" in low:
+                    relationship = "Joint Venture"
+                subsidiaries.append({"name": name, "relationship": relationship})
+        return subsidiaries[:8]
+
+    @staticmethod
+    def _extract_lenders(financials: Dict[str, Any], mca_report: Any) -> List[Dict[str, Any]]:
+        lenders: List[Dict[str, Any]] = []
+        seen: set[str] = set()
+
+        for charge in getattr(mca_report, "registered_charges", []) or []:
+            holder = str(getattr(charge, "lender", "")).strip()
+            if not holder:
+                continue
+            key = holder.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            amount = float(getattr(charge, "amount", 0.0) or 0.0)
+            amount_cr = round(amount / 1e7, 2) if amount > 1e5 else round(amount, 2)
+            lenders.append({"holder": holder, "amount_cr": amount_cr})
+
+        for bank in financials.get("existing_bank_limits", []) or []:
+            if not isinstance(bank, dict):
+                continue
+            holder = str(bank.get("lender", "")).strip()
+            if not holder:
+                continue
+            key = holder.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            amount = float(bank.get("limit_amount", 0.0) or 0.0)
+            amount_cr = round(amount / 1e7, 2) if amount > 1e5 else round(amount, 2)
+            lenders.append({"holder": holder, "amount_cr": amount_cr})
+        return lenders[:10]
 
     @staticmethod
     def _extract_promoters(due: Optional[DueDiligenceRecord]) -> List[str]:

@@ -16,6 +16,8 @@ from docx.shared import Inches, Pt, RGBColor
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.core.formatting import format_currency_cr, format_percentage
+
 logger = logging.getLogger(__name__)
 
 _BLUE = RGBColor(0x1E, 0x6F, 0xD9)
@@ -100,11 +102,11 @@ async def generate_investment_report(company_id: str, db: AsyncSession) -> str:
         if decision_color:
             run.font.color.rgb = decision_color
         doc.add_paragraph(
-            f"Risk Score: {score.final_risk_score:.1f} / 100 — {score.risk_category}"
+            f"Risk Score: {round(float(score.final_risk_score), 1)} / 100 - {score.risk_category}"
         )
         if score.recommended_limit_crore:
             doc.add_paragraph(
-                f"Recommended Limit: ₹{score.recommended_limit_crore:.1f} Cr"
+                f"Recommended Limit: {format_currency_cr(score.recommended_limit_crore)}"
             )
     if swot and swot.investment_thesis:
         doc.add_paragraph(f"Investment Thesis: {swot.investment_thesis}")
@@ -118,7 +120,9 @@ async def generate_investment_report(company_id: str, db: AsyncSession) -> str:
         ("Sector", getattr(company, "sector", None) or "N/A"),
         (
             "Annual Turnover",
-            f"₹{getattr(company, 'annual_turnover_cr', None) or 'N/A'} Cr",
+            format_currency_cr(getattr(company, "annual_turnover_cr", None))
+            if getattr(company, "annual_turnover_cr", None) is not None
+            else "N/A",
         ),
         (
             "Year of Incorporation",
@@ -133,14 +137,14 @@ async def generate_investment_report(company_id: str, db: AsyncSession) -> str:
             doc,
             [
                 ("Loan Type", loan.loan_type),
-                ("Amount Requested", f"₹{loan.loan_amount_cr:.1f} Cr"),
+                ("Amount Requested", format_currency_cr(loan.loan_amount_cr)),
                 ("Tenure", f"{loan.tenure_months} months"),
                 ("Proposed Rate", f"{loan.proposed_rate_pct or 'TBD'}% p.a."),
                 ("Repayment Mode", loan.repayment_mode or "N/A"),
                 ("Purpose", loan.purpose or "N/A"),
                 (
                     "Collateral",
-                    f"{loan.collateral_type or 'None'} — ₹{loan.collateral_value_cr or 0:.1f} Cr",
+                    f"{loan.collateral_type or 'None'} - {format_currency_cr(loan.collateral_value_cr or 0)}",
                 ),
             ],
         )
@@ -171,7 +175,7 @@ async def generate_investment_report(company_id: str, db: AsyncSession) -> str:
                 ("Rule-based Score", f"{score.rule_based_score:.1f} / 100"),
                 (
                     "ML Stress Probability",
-                    f"{score.ml_stress_probability:.1%}"
+                    format_percentage(float(score.ml_stress_probability) * 100)
                     if score.ml_stress_probability
                     else "N/A",
                 ),
@@ -221,13 +225,13 @@ async def generate_investment_report(company_id: str, db: AsyncSession) -> str:
             _info_table(
                 doc,
                 [
-                    ("RBI Repo Rate", f"{ms.get('rbi_repo_rate_pct', 'N/A')}%"),
-                    ("India GDP Growth", f"{ms.get('india_gdp_growth_pct', 'N/A')}%"),
+                    ("RBI Repo Rate", format_percentage(ms.get("rbi_repo_rate_pct"))),
+                    ("India GDP Growth", format_percentage(ms.get("india_gdp_growth_pct"))),
                     (
                         "Sector Credit Growth",
-                        f"{ms.get('sector_credit_growth_pct', 'N/A')}%",
+                        format_percentage(ms.get("sector_credit_growth_pct")),
                     ),
-                    ("CPI Inflation", f"{ms.get('inflation_cpi_pct', 'N/A')}%"),
+                    ("CPI Inflation", format_percentage(ms.get("inflation_cpi_pct"))),
                 ],
             )
     doc.add_page_break()
@@ -299,11 +303,12 @@ async def generate_investment_report(company_id: str, db: AsyncSession) -> str:
         run.font.size = Pt(14)
         if loan:
             doc.add_paragraph(
-                f"Requested: ₹{loan.loan_amount_cr:.1f} Cr | Recommended: ₹{score.recommended_limit_crore or loan.loan_amount_cr:.1f} Cr"
+                f"Requested: {format_currency_cr(loan.loan_amount_cr)} | "
+                f"Recommended: {format_currency_cr(score.recommended_limit_crore or loan.loan_amount_cr)}"
             )
         if getattr(score, "interest_premium_bps", None):
             doc.add_paragraph(
-                f"Pricing Guidance: MCLR + {score.interest_premium_bps}bps"
+                f"Pricing Guidance: MCLR + {score.interest_premium_bps} bps"
             )
     if swot and swot.recommendation:
         doc.add_paragraph(swot.recommendation)

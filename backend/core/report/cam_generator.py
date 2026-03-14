@@ -17,6 +17,7 @@ from docx.oxml.ns import qn
 from docx.shared import Pt, RGBColor
 
 from backend.config import settings
+from backend.core.formatting import format_currency_cr, format_percentage, format_ratio
 from backend.core.report.five_c_analyzer import analyze_five_cs
 from backend.core.report.templates.cam_template import CAM_SECTION_ORDER
 
@@ -110,7 +111,7 @@ class CAMGenerator:
             f"Company: {company.get('name')} | CIN: {company.get('cin', 'N/A')} | Sector: {company.get('sector')}"
         )
         doc.add_paragraph(
-            f"Loan Request: ₹{company.get('loan_amount_requested', 0):,.2f} crore | "
+            f"Loan Request: {format_currency_cr(company.get('loan_amount_requested', 0))} | "
             f"Tenor: {company.get('loan_tenor_months', 36)} months | Purpose: {company.get('loan_purpose', 'N/A')}"
         )
         box = doc.add_paragraph()
@@ -118,7 +119,7 @@ class CAMGenerator:
         if recommendation == "REJECT":
             box.add_run(
                 f"Recommendation: REJECT | "
-                f"Limit: Not Sanctioned (Requested: ₹{decision.get('recommended_loan_amount', 0):,.2f} crore) | "
+                f"Limit: Not Sanctioned (Requested: {format_currency_cr(decision.get('recommended_loan_amount', 0))}) | "
                 f"Rate: N/A"
             ).bold = True
             if decision.get("rule_hits"):
@@ -126,7 +127,7 @@ class CAMGenerator:
         else:
             box.add_run(
                 f"Recommendation: {recommendation} | "
-                f"Amount: ₹{decision.get('recommended_loan_amount', 0):,.2f} crore | "
+                f"Amount: {format_currency_cr(decision.get('recommended_loan_amount', 0))} | "
                 f"Rate: {decision.get('recommended_interest_rate', 0):.2f}% p.a."
             ).bold = True
 
@@ -169,7 +170,7 @@ class CAMGenerator:
         doc.add_paragraph(f"Borrower-declared risks: {risks}")
         if due_diligence.get("factory_capacity_utilization") is not None:
             doc.add_paragraph(
-                f"Declared capacity utilization: {float(due_diligence.get('factory_capacity_utilization')):.1f}%"  # type: ignore[reportArgumentType]
+                f"Declared capacity utilization: {format_percentage(due_diligence.get('factory_capacity_utilization'))}"  # type: ignore[reportArgumentType]
             )
 
     @staticmethod
@@ -209,7 +210,10 @@ class CAMGenerator:
         ]:
             row = table.add_row().cells
             row[0].text = str(metric)
-            row[1].text = f"{value}"
+            if metric == "Consistency Score":
+                row[1].text = format_percentage(value)
+            else:
+                row[1].text = format_ratio(value)
 
     @staticmethod
     def _section_risk_assessment(
@@ -230,7 +234,8 @@ class CAMGenerator:
             row[1].text = "Medium/High"
             row[2].text = "Quarterly covenant tracking and early warning triggers."
         doc.add_paragraph(
-            f"Overall data consistency score: {cross_validation.get('overall_data_consistency_score', 'N/A')}"
+            "Overall data consistency score: "
+            f"{format_percentage(cross_validation.get('overall_data_consistency_score'))}"
         )
 
     @staticmethod
@@ -260,7 +265,7 @@ class CAMGenerator:
         doc.add_paragraph(f"Final credit score: {decision.get('credit_score')}/900")
         doc.add_paragraph(f"Decision: {decision.get('recommendation')}")
         doc.add_paragraph(
-            f"Recommended loan amount: ₹{decision.get('recommended_loan_amount', 0):,.2f} crore"
+            f"Recommended loan amount: {format_currency_cr(decision.get('recommended_loan_amount', 0))}"
         )
         doc.add_paragraph(
             f"Recommended interest rate: {decision.get('recommended_interest_rate', 0):.2f}% p.a."

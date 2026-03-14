@@ -5,7 +5,9 @@ import * as d3 from 'd3';
 
 interface NodeData {
   id: string;
-  type: 'company' | 'counterparty';
+  label?: string;
+  type: 'company' | 'counterparty' | 'Company' | 'Entity';
+  risk?: 'LOW' | 'MEDIUM' | 'HIGH' | string;
   x?: number;
   y?: number;
   fx?: number | null;
@@ -20,12 +22,24 @@ interface LinkData {
   signals?: string[];
 }
 
+interface WeakAssociation {
+  entity: string;
+  signal: string;
+  confidence?: string;
+}
+
 export default function FraudGraph({
   nodes,
   links,
+  weakAssociations = [],
+  entityCount,
+  connectionCount,
 }: {
   nodes: NodeData[];
   links: LinkData[];
+  weakAssociations?: WeakAssociation[];
+  entityCount?: number;
+  connectionCount?: number;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -87,9 +101,9 @@ export default function FraudGraph({
       .data(simNodes)
       .enter()
       .append('circle')
-      .attr('r', (d) => (d.type === 'company' ? 14 : 10))
+      .attr('r', (d) => (String(d.type).toLowerCase() === 'company' ? 14 : 10))
       .attr('fill', (d) =>
-        d.type === 'company' ? 'var(--ob-text)' : 'rgba(255, 140, 80, 0.85)'
+        String(d.type).toLowerCase() === 'company' ? 'var(--ob-text)' : 'rgba(255, 140, 80, 0.85)'
       )
       .attr('stroke', 'var(--ob-bg)')
       .attr('stroke-width', 2)
@@ -100,7 +114,7 @@ export default function FraudGraph({
         setTooltip({
           x: event.clientX - rect.left,
           y: event.clientY - rect.top - 36,
-          text: d.type === 'company' ? `🏢 ${d.id}` : `⚠️ ${d.id}`,
+          text: String(d.type).toLowerCase() === 'company' ? `🏢 ${d.label || d.id}` : `⚠️ ${d.label || d.id}`,
         });
       })
       .on('mouseout', () => setTooltip(null))
@@ -129,7 +143,10 @@ export default function FraudGraph({
       .data(simNodes)
       .enter()
       .append('text')
-      .text((d) => (d.id.length > 18 ? d.id.slice(0, 16) + '…' : d.id))
+      .text((d) => {
+        const textValue = d.label || d.id;
+        return textValue.length > 18 ? textValue.slice(0, 16) + '…' : textValue;
+      })
       .attr('font-size', 10)
       .attr('font-family', 'DM Mono, monospace')
       .attr('fill', 'var(--ob-muted)')
@@ -204,8 +221,22 @@ export default function FraudGraph({
         )}
       </div>
       <p className="text-[10px] text-ob-muted mt-2">
-        {nodes.length} entities · {links.length} confirmed connections · Drag nodes to explore
+        {(entityCount ?? nodes.length)} entities · {(connectionCount ?? links.length)} confirmed connections · Drag nodes to explore
       </p>
+      {links.length === 0 && weakAssociations.length > 0 && (
+        <details className="mt-2">
+          <summary className="text-[11px] text-ob-muted cursor-pointer">
+            Show weak associations (unverified)
+          </summary>
+          <div className="mt-2 space-y-1">
+            {weakAssociations.map((a, idx) => (
+              <p key={`${a.entity}-${idx}`} className="text-[11px] text-ob-muted font-mono">
+                {a.entity} - {a.signal} ({a.confidence || 'LOW'} confidence)
+              </p>
+            ))}
+          </div>
+        </details>
+      )}
     </div>
   );
 }

@@ -19,6 +19,7 @@ import {
   getSwotV1,
   getInvestmentReportUrl,
 } from '@/lib/api';
+import { formatCurrencyCr, formatPercentage, formatRatio } from '@/lib/formatters';
 import { useAnalysisStore } from '@/store/analysisStore';
 import FiveCsRadar from '@/components/FiveCsRadar';
 import TimelineView from '@/components/TimelineView';
@@ -100,7 +101,9 @@ export default function ResultsPage() {
   }, [companyId, storeResult]);
 
   const decision = result?.decision || {};
-  const score = Number(decision.credit_score || 0);
+  const score = Number(
+    decision.normalized_score ?? (decision.credit_score ? (Number(decision.credit_score) / 900) * 100 : 0)
+  );
   const dueDiligence = result?.due_diligence || {};
   const borrowerContext = dueDiligence?.borrower_context || {};
   const humanImpactPoints = Number(decision?.human_input_impact_points || 0);
@@ -209,19 +212,19 @@ export default function ResultsPage() {
             <p className="font-mono text-[9px] font-normal tracking-[0.14em] uppercase text-ob-dim mb-2.5">Analysis Results</p>
             <div className="flex flex-wrap gap-4 items-baseline">
               <span className="font-display text-[32px] text-ob-text">{score.toFixed(0)}</span>
-              <span className="text-ob-muted text-[14px]">/ 900</span>
+              <span className="text-ob-muted text-[14px]">/ 100</span>
               <span className="font-mono text-[13px] bg-ob-glass2 text-ob-text px-2 py-0.5 rounded">{decision.risk_grade}</span>
               <span className="font-mono text-[13px] bg-ob-glass2 text-ob-ok px-2 py-0.5 rounded">{decision.recommendation}</span>
             </div>
             <p className="text-ob-muted text-[13px] mt-2">
               {decision.recommendation === 'REJECT' ? (
                 <>
-                  Recommended: <span className="font-mono text-ob-warn">Not Sanctioned (Requested: ₹{Number(decision.recommended_loan_amount || 0).toFixed(2)} Cr)</span>
+                  Recommended: <span className="font-mono text-ob-warn">Not Sanctioned (Requested: {formatCurrencyCr(Number(decision.recommended_loan_amount || 0))})</span>
                   {' · '}Interest: <span className="font-mono text-ob-muted">N/A</span>
                 </>
               ) : (
                 <>
-                  Recommended: <span className="font-mono text-ob-text">₹{Number(decision.recommended_loan_amount || 0).toFixed(2)} Cr</span>
+                  Recommended: <span className="font-mono text-ob-text">{formatCurrencyCr(Number(decision.recommended_loan_amount || 0))}</span>
                   {' · '}Interest: <span className="font-mono text-ob-text">{Number(decision.recommended_interest_rate || 0).toFixed(2)}%</span>
                 </>
               )}
@@ -322,8 +325,8 @@ export default function ResultsPage() {
                 <div className="space-y-2 text-[12px]">
                   <p className="text-ob-muted">Finance officer: <span className="text-ob-text font-medium">{String(borrowerContext.finance_officer_name || 'N/A')}</span></p>
                   <p className="text-ob-muted">Cooperation: <span className="text-ob-text font-medium">{String(borrowerContext.management_cooperation || 'N/A')}</span></p>
-                  <p className="text-ob-muted">Capacity: <span className="font-mono text-ob-text">{Number(dueDiligence.factory_capacity_utilization || 0).toFixed(0)}%</span></p>
-                  <p className="text-ob-muted">Integrity: <span className="font-mono text-ob-text">{Number(dueDiligence.management_integrity_score || 0).toFixed(1)}/10</span></p>
+                  <p className="text-ob-muted">Capacity: <span className="font-mono text-ob-text">{formatPercentage(Number(dueDiligence.factory_capacity_utilization || 0))}</span></p>
+                  <p className="text-ob-muted">Integrity: <span className="font-mono text-ob-text">{formatRatio(Number(dueDiligence.management_integrity_score || 0), 1, '/10')}</span></p>
                 </div>
               ) : (
                 <p className="text-ob-muted text-[12px]">No borrower inputs captured.</p>
@@ -364,6 +367,9 @@ export default function ResultsPage() {
             <FraudGraph
               nodes={result.fraud_graph.nodes}
               links={result.fraud_graph.links || []}
+              weakAssociations={result.fraud_graph.weak_associations || []}
+              entityCount={result.fraud_graph.entity_count}
+              connectionCount={result.fraud_graph.connection_count}
             />
           ) : (
             <div className="bg-ob-glass border border-ob-edge rounded-[12px] p-[20px] backdrop-blur-[28px]">

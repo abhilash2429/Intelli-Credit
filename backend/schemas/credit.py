@@ -251,11 +251,13 @@ class DueDiligenceInsight(BaseModel):
 
 class CreditDecision(BaseModel):
     credit_score: float
+    normalized_score: float
     score_band: str
     risk_grade: str
     recommendation: str
     recommended_loan_amount: float
     recommended_interest_rate: float
+    interest_premium_bps: int
     confidence_interval: List[float]
     human_input_impact_points: float = 0.0
     rule_hits: List[str] = Field(default_factory=list)

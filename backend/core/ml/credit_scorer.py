@@ -22,57 +22,71 @@ from backend.core.ml.risk_rules import evaluate_hard_rules
 from backend.schemas.credit import CreditDecision
 
 
-GRADE_BANDS = [
-    ("AAA", 850, 900),
-    ("AA", 800, 849),
-    ("A", 750, 799),
-    ("BBB", 700, 749),
-    ("BB", 650, 699),
-    ("B", 600, 649),
-    ("D", 300, 599),
-]
-
-
-def calculate_risk_premium(credit_score: float, sector: str, loan_type: str) -> float:
+def compute_interest_premium_bps(grade: str) -> int:
     """
-    Interest pricing engine: base + score band premium + sector premium.
-    Always returns a non-negative rate. For REJECT cases, returns the
-    hypothetical rate (for informational purposes) rather than -1.
+    Maps credit grade to risk premium in basis points above benchmark.
+    Benchmark = RBI repo rate or MCLR as applicable.
     """
-    base_rate = settings.base_interest_rate
-
-    # Premium in basis points based on score band
-    if 850 <= credit_score <= 900:
-        premium_bps = 25     # AA grade
-    elif 750 <= credit_score < 850:
-        premium_bps = 60     # A- grade
-    elif 700 <= credit_score < 750:
-        premium_bps = 120    # B grade
-    elif 650 <= credit_score < 700:
-        premium_bps = 200    # C grade
-    elif 600 <= credit_score < 650:
-        premium_bps = 300    # D grade (borderline)
-    elif 450 <= credit_score < 600:
-        premium_bps = 300    # D grade
-    else:
-        premium_bps = 300    # Below D — REJECT territory
-
-    sector_map = {
-        "nbfc": 50,
-        "real_estate": 100,
-        "manufacturing": 0,
-        "it": 0,
-        "energy": 25,
-        "mining": 50,
+    premium_map = {
+        "AAA": 50,
+        "AA+": 60,
+        "AA": 75,
+        "AA-": 100,
+        "A+": 125,
+        "A": 150,
+        "A-": 175,
+        "BBB+": 200,
+        "BBB": 225,
+        "BBB-": 250,
+        "BB+": 275,
+        "BB": 300,
+        "BB-": 325,
+        "B+": 350,
+        "B": 400,
+        "B-": 450,
+        "C": 600,
+        "D": 0,  # reject, no lending
     }
-    premium_bps += sector_map.get(sector.lower(), 0)
-    if loan_type.lower() == "unsecured":
-        premium_bps += 50
+    return int(premium_map.get(grade, 300))
 
-    # Never allow negative premium
-    premium_bps = max(premium_bps, 0)
-    final_rate = round(base_rate + premium_bps / 100.0, 2)
-    return final_rate
+
+def format_interest_rate(grade: str, base_rate_pct: float = 8.5) -> dict:
+    bps = compute_interest_premium_bps(grade)
+    total_rate = base_rate_pct + (bps / 100)
+    return {
+        "premium_bps": bps,
+        "display": f"Benchmark + {bps} bps",
+        "effective_rate": f"{total_rate:.2f}%",
+    }
+
+
+def compute_recommended_limit(
+    requested_amount_cr: float,
+    extracted_revenue_cr: float,
+    grade: str,
+) -> float:
+    """
+    Compute approved limit in Cr based on request, annual revenue cap, and risk grade.
+    """
+    max_allowable = max(extracted_revenue_cr, 0.0) * 0.25
+    grade_multiplier = {
+        "AAA": 1.0,
+        "AA+": 1.0,
+        "AA": 1.0,
+        "AA-": 1.0,
+        "A+": 0.95,
+        "A": 0.90,
+        "BBB+": 0.80,
+        "BBB": 0.75,
+        "BB+": 0.65,
+        "BB": 0.60,
+        "B": 0.45,
+        "D": 0.0,
+    }
+    multiplier = grade_multiplier.get(grade, 0.70)
+    base_approved = min(max(requested_amount_cr, 0.0), max_allowable)
+    approved = base_approved * multiplier
+    return round(approved, 2)
 
 
 @dataclass
@@ -133,6 +147,8 @@ class CreditScoringModel:
         features: Dict[str, float],
         *,
         requested_loan_amount: float,
+        annual_revenue_cr: float = 0.0,
+        form_turnover_cr: float = 100.0,
         sector: str,
         loan_type: str = "secured",
     ) -> CreditDecision:
@@ -140,14 +156,23 @@ class CreditScoringModel:
         if rule_hits:
             # On hard REJECT: compute limit and rate for informational display,
             # but mark as REJECT with clear "Not Sanctioned" semantics.
-            pricing = calculate_risk_premium(450.0, sector, loan_type)
+            risk_grade = "D"
+            pricing = float(
+                format_interest_rate(risk_grade, settings.base_interest_rate)["effective_rate"].rstrip("%")
+            )
             return CreditDecision(
                 credit_score=450.0,
+                normalized_score=round((450.0 / 900.0) * 100.0, 1),
                 score_band="300-599",
-                risk_grade="D",
+                risk_grade=risk_grade,
                 recommendation="REJECT",
-                recommended_loan_amount=requested_loan_amount,  # Show requested amount (for "Not Sanctioned (Requested: ₹X Cr)")
+                recommended_loan_amount=compute_recommended_limit(
+                    requested_loan_amount,
+                    (annual_revenue_cr or form_turnover_cr),
+                    risk_grade,
+                ),
                 recommended_interest_rate=pricing,  # Informational rate, always positive
+                interest_premium_bps=compute_interest_premium_bps(risk_grade),
                 confidence_interval=[420.0, 480.0],
                 human_input_impact_points=0.0,
                 rule_hits=rule_hits,
@@ -161,39 +186,37 @@ class CreditScoringModel:
 
         # Blend model score with stress probability to reduce overconfidence.
         adjusted_score = model_score - (stress_prob * 220.0) + human_input_impact
-        credit_score = float(np.clip(adjusted_score, 300, 900))
-        risk_grade = self._grade_from_score(credit_score)
-        recommendation = "REJECT" if credit_score < 600 else "APPROVE"
-        if 620 <= credit_score < 720:
+        credit_score = float(np.clip(adjusted_score, 0, 900))
+        normalized_score = round((credit_score / 900.0) * 100.0, 1)
+        risk_grade = self._grade_from_normalized(normalized_score)
+        recommendation = "REJECT" if normalized_score < 50 else "APPROVE"
+        if 60 <= normalized_score < 70:
             recommendation = "CONDITIONAL_APPROVE"
-
-        pricing = calculate_risk_premium(credit_score, sector, loan_type)
-
         if recommendation == "REJECT":
-            # On REJECT, show requested amount for display purposes
-            recommended_amount = requested_loan_amount
-        elif recommendation == "CONDITIONAL_APPROVE":
-            # Reduced limit for conditional approval
-            collateral_cov = features.get("collateral_coverage_ratio", 1.0)
-            reduced = requested_loan_amount * (credit_score / 900) * min(collateral_cov, 1.5)
-            recommended_amount = round(
-                max(0.25 * requested_loan_amount, min(reduced, requested_loan_amount)), 2
-            )
-        else:
-            # Full APPROVE: risk-adjusted exposure
-            exposure_factor = float(np.clip((credit_score - 500) / 350, 0.0, 1.1))
-            recommended_amount = round(requested_loan_amount * exposure_factor, 2)
+            risk_grade = "D"
+
+        extracted_revenue = float(annual_revenue_cr or form_turnover_cr or 0.0)
+        premium_bps = compute_interest_premium_bps(risk_grade)
+        pricing = float(format_interest_rate(risk_grade, settings.base_interest_rate)["effective_rate"].rstrip("%"))
+        # Compute limit after grade is determined.
+        recommended_amount = compute_recommended_limit(
+            requested_loan_amount,
+            extracted_revenue,
+            risk_grade,
+        )
 
         ci_half_width = max(12.0, (1 - self._data_completeness(features)) * 70)
         return CreditDecision(
             credit_score=round(credit_score, 2),
-            score_band=f"{int(max(300, credit_score - 25))}-{int(min(900, credit_score + 25))}",
+            normalized_score=normalized_score,
+            score_band=f"{int(max(0, normalized_score - 5))}-{int(min(100, normalized_score + 5))}",
             risk_grade=risk_grade,
             recommendation=recommendation,
             recommended_loan_amount=recommended_amount,
             recommended_interest_rate=pricing,
+            interest_premium_bps=premium_bps,
             confidence_interval=[
-                round(max(300, credit_score - ci_half_width), 2),
+                round(max(0, credit_score - ci_half_width), 2),
                 round(min(900, credit_score + ci_half_width), 2),
             ],
             human_input_impact_points=round(human_input_impact, 2),
@@ -255,11 +278,19 @@ class CreditScoringModel:
         return df
 
     @staticmethod
-    def _grade_from_score(score: float) -> str:
-        for grade, low, high in GRADE_BANDS:
-            if low <= score <= high:
-                return grade
-        return "D"
+    def _grade_from_normalized(score: float) -> str:
+        s = max(0.0, min(100.0, score))
+        if 90 <= s <= 100:
+            return "AAA"
+        if 80 <= s < 90:
+            return "AA-"
+        if 70 <= s < 80:
+            return "A"
+        if 60 <= s < 70:
+            return "BBB"
+        if 50 <= s < 60:
+            return "BB"
+        return "B"
 
     @staticmethod
     def _data_completeness(features: Dict[str, float]) -> float:

@@ -22,6 +22,8 @@ from reportlab.platypus import (
     PageBreak,
 )
 
+from backend.core.formatting import format_currency_cr, format_percentage, format_ratio
+
 logger = logging.getLogger(__name__)
 
 
@@ -149,16 +151,16 @@ def generate_pdf(state: dict) -> str:
 
     table_data = [
         ["Metric", "Value"],
-        ["Revenue (₹ Crore)", str(f.get("revenue_crore", "N/A"))],
-        ["EBITDA Margin", f"{f.get('ebitda_margin_pct', 'N/A')}%"],
-        ["PAT (₹ Crore)", str(f.get("pat_crore", "N/A"))],
-        ["DSCR", f"{f.get('dscr', 'N/A')}x"],
-        ["Current Ratio", f"{f.get('current_ratio', 'N/A')}x"],
-        ["Net Worth (₹ Crore)", str(f.get("net_worth_crore", "N/A"))],
-        ["Total Debt (₹ Crore)", str(f.get("total_debt_crore", "N/A"))],
+        ["Revenue", format_currency_cr(f.get("revenue_crore"))],
+        ["EBITDA Margin", format_percentage(f.get("ebitda_margin_pct"))],
+        ["PAT", format_currency_cr(f.get("pat_crore"))],
+        ["DSCR", format_ratio(f.get("dscr"))],
+        ["Current Ratio", format_ratio(f.get("current_ratio"))],
+        ["Net Worth", format_currency_cr(f.get("net_worth_crore"))],
+        ["Total Debt", format_currency_cr(f.get("total_debt_crore"))],
         ["Risk Score", f"{state.get('final_risk_score', 'N/A')}/100"],
         ["Risk Category", str(state.get("risk_category", "N/A"))],
-        ["Recommended Limit", f"₹{state.get('recommended_loan_limit_crore', 0)} Crore"],
+        ["Recommended Limit", format_currency_cr(state.get("recommended_loan_limit_crore"))],
     ]
 
     table = Table(table_data, colWidths=[3 * inch, 3 * inch])

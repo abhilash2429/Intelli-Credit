@@ -90,6 +90,11 @@ def parse_financial_statement_xlsx(file_path: str) -> Dict[str, Any]:
     interest_coverage_value = None
     dscr_value = None
     current_portion_ltd = None
+    equity_share_capital = None
+    other_equity = None
+    long_term_borrowings = None
+    short_term_borrowings = None
+    total_debt_from_total_row = None
 
     for sheet_name in wb.sheetnames:
         sheet = wb[sheet_name]
@@ -138,10 +143,63 @@ def parse_financial_statement_xlsx(file_path: str) -> Dict[str, Any]:
             logger.info(f"[XLSX] Parsing Balance Sheet: {sheet_name}")
             total_debt = _find_row_value(sheet, ["total borrowings", "total debt", "long term borrowings", "long-term borrowings"], value_col)
             if total_debt is not None:
+                total_debt_from_total_row = total_debt
                 result["total_debt_crore"] = total_debt
             equity = _find_row_value(sheet, ["total equity", "net worth", "shareholders equity", "shareholder's equity"], value_col)
             if equity is not None:
                 result["net_worth_crore"] = equity
+            eq_share = _find_row_value(
+                sheet,
+                [
+                    "equity share capital",
+                    "paid-up equity share capital",
+                    "paid up equity share capital",
+                    "paid-up share capital",
+                    "paid up share capital",
+                    "share capital",
+                    "equity capital",
+                ],
+                value_col,
+            )
+            if eq_share is not None:
+                equity_share_capital = eq_share
+            reserves = _find_row_value(
+                sheet,
+                [
+                    "other equity",
+                    "reserves and surplus",
+                    "reserves & surplus",
+                    "total reserves",
+                    "retained earnings",
+                ],
+                value_col,
+            )
+            if reserves is not None:
+                other_equity = reserves
+            lt_b = _find_row_value(
+                sheet,
+                [
+                    "long term borrowings",
+                    "long-term borrowings",
+                    "non current borrowings",
+                    "non-current borrowings",
+                ],
+                value_col,
+            )
+            if lt_b is not None:
+                long_term_borrowings = lt_b
+            st_b = _find_row_value(
+                sheet,
+                [
+                    "short term borrowings",
+                    "short-term borrowings",
+                    "current borrowings",
+                    "working capital borrowings",
+                ],
+                value_col,
+            )
+            if st_b is not None:
+                short_term_borrowings = st_b
             current_assets = _find_row_value(sheet, ["total current assets", "current assets"], value_col)
             if current_assets is not None:
                 result["current_assets_crore"] = current_assets
@@ -154,6 +212,36 @@ def parse_financial_statement_xlsx(file_path: str) -> Dict[str, Any]:
             contingent = _find_row_value(sheet, ["contingent liabilities", "contingent liability"], value_col)
             if contingent is not None:
                 result["total_contingent_liabilities"] = contingent
+
+    # Prefer component-based leverage computation:
+    # total_equity = equity_share_capital + other_equity
+    # total_debt = long_term_borrowings + short_term_borrowings
+    total_equity = None
+    if equity_share_capital is not None and other_equity is not None:
+        total_equity = float(equity_share_capital) + float(other_equity)
+    elif result.get("net_worth_crore") is not None:
+        total_equity = float(result.get("net_worth_crore"))  # type: ignore[arg-type]
+
+    total_debt = None
+    if long_term_borrowings is not None and short_term_borrowings is not None:
+        total_debt = float(long_term_borrowings) + float(short_term_borrowings)
+    elif total_debt_from_total_row is not None:
+        total_debt = float(total_debt_from_total_row)
+
+    if total_equity and total_equity > 0 and total_debt is not None:
+        de_ratio = total_debt / total_equity
+        if de_ratio > 20:
+            logger.warning(
+                "D/E ratio %s seems unusually high - check extraction. Setting to None for manual review.",
+                round(de_ratio, 3),
+            )
+            result["de_ratio"] = None
+            result["debt_equity_ratio"] = None
+        else:
+            result["de_ratio"] = round(de_ratio, 3)
+            result["debt_equity_ratio"] = round(de_ratio, 3)
+        result["total_debt_crore"] = round(total_debt, 3)
+        result["net_worth_crore"] = round(total_equity, 3)
 
     wb.close()
 

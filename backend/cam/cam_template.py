@@ -7,6 +7,8 @@ All scores, limits, and decisions come from the rules/ML engine.
 
 from typing import Dict, Any
 
+from backend.core.formatting import format_currency_cr, format_percentage, format_ratio
+
 CAM_SYSTEM_PROMPT = """
 You are a senior credit analyst at a leading Indian bank (SBI/HDFC/Axis level).
 You are writing a Credit Appraisal Memo (CAM) for the credit committee.
@@ -34,7 +36,7 @@ def _compute_de(f: Dict) -> Any:
     """
     debt = f.get("total_debt_crore") or 0
     equity = f.get("net_worth_crore") or 1
-    return round(debt / equity, 2) if equity > 0 else "N/A"
+    return format_ratio(debt / equity) if equity > 0 else "Not Available"
 
 
 def build_cam_prompt(state: dict) -> str:
@@ -56,23 +58,23 @@ def build_cam_prompt(state: dict) -> str:
 COMPANY: {state.get('company_name')}
 DECISION: {state.get('decision')}
 FINAL RISK SCORE: {state.get('final_risk_score')}/100 ({state.get('risk_category')} RISK)
-RECOMMENDED LOAN LIMIT: ₹{state.get('recommended_loan_limit_crore')} Crore
+RECOMMENDED LOAN LIMIT: {format_currency_cr(state.get('recommended_loan_limit_crore'))}
 INTEREST PREMIUM: {state.get('interest_rate_premium_bps')} bps over MCLR
 
 FINANCIALS:
-- Revenue (3 years): {f.get('revenue_crore')} Crore
-- EBITDA Margin: {f.get('ebitda_margin_pct')}%
-- PAT: ₹{f.get('pat_crore')} Crore
-- DSCR: {f.get('dscr')}x
-- Current Ratio: {f.get('current_ratio')}x
-- Debt/Equity: {_compute_de(f)}x
-- Net Worth: ₹{f.get('net_worth_crore')} Crore
-- Total Debt: ₹{f.get('total_debt_crore')} Crore
+- Revenue (3 years): {format_currency_cr(f.get('revenue_crore'))}
+- EBITDA Margin: {format_percentage(f.get('ebitda_margin_pct'))}
+- PAT: {format_currency_cr(f.get('pat_crore'))}
+- DSCR: {format_ratio(f.get('dscr'))}
+- Current Ratio: {format_ratio(f.get('current_ratio'))}
+- Debt/Equity: {_compute_de(f)}
+- Net Worth: {format_currency_cr(f.get('net_worth_crore'))}
+- Total Debt: {format_currency_cr(f.get('total_debt_crore'))}
 - Auditor Opinion: {f.get('auditor_opinion')}
-- Promoter Holding: {f.get('promoter_holding_pct')}%
+- Promoter Holding: {format_percentage(f.get('promoter_holding_pct'))}
 
 GST & BANK:
-- GST-Bank Mismatch: {state.get('gst_bank_mismatch_pct')}%
+- GST-Bank Mismatch: {format_percentage(state.get('gst_bank_mismatch_pct'))}
 - Circular Trading: {'DETECTED - HIGH RISK' if state.get('circular_trading_detected') else 'Not detected'}
 
 RESEARCH:
@@ -89,7 +91,7 @@ RISK STRENGTHS:
 
 QUALITATIVE NOTES (Credit Officer):
 {state.get('qualitative_notes', 'None provided')}
-Factory Capacity: {state.get('site_visit_capacity_pct', 'Not visited')}%
+Factory Capacity: {format_percentage(state.get('site_visit_capacity_pct')) if state.get('site_visit_capacity_pct') is not None else 'Not visited'}
 Management Assessment: {state.get('management_assessment', 'None')}
 
 === WRITE THE CREDIT APPRAISAL MEMO WITH THESE EXACT SECTIONS ===
@@ -113,8 +115,8 @@ Management Assessment: {state.get('management_assessment', 'None')}
 
 7. RECOMMENDATION
    - Decision: {state.get('decision')}
-   - Loan Limit: ₹{state.get('recommended_loan_limit_crore')} Crore
-   - Interest Rate: MCLR + {state.get('interest_rate_premium_bps')}bps
+   - Loan Limit: {format_currency_cr(state.get('recommended_loan_limit_crore'))}
+   - Interest Rate: MCLR + {state.get('interest_rate_premium_bps')} bps
    - Covenants (if Conditional Approve): list specific conditions
    - Rejection Rationale (if Reject): cite exact rule violations triggered
 
