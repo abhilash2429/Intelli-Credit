@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { useAnalysisStore } from '@/store/analysisStore';
-import { getExplainV1 } from '@/lib/api';
+import { getExplainV1, getResultsV1 } from '@/lib/api';
 import ShapChart from '@/components/ShapChart';
 import FraudGraph from '@/components/FraudGraph';
+import { useMemo } from 'react';
 
 const INDIA_TOOLTIPS: Record<string, string> = {
   GSTR2A: 'Auto-populated purchase data from supplier filings. Usually hard to manipulate at buyer side.',
@@ -16,18 +17,41 @@ const INDIA_TOOLTIPS: Record<string, string> = {
 
 export default function ExplainPage() {
   const [explain, setExplain] = useState<any>(null);
-  const { companyId } = useAnalysisStore();
+  const [loading, setLoading] = useState(false);
+  const { companyId, result, setResult } = useAnalysisStore();
 
   useEffect(() => {
     if (!companyId) return;
+
+    // Fetch explanation payload
     getExplainV1(companyId).then((res) => setExplain(res.data)).catch(console.error);
-  }, [companyId]);
+
+    // Fetch full results payload if missing in store (e.g. hard refresh)
+    if (!result || !result.decision) {
+      setLoading(true);
+      getResultsV1(companyId)
+        .then((res: any) => setResult(res.data))
+        .catch(console.error)
+        .finally(() => setLoading(false));
+    }
+  }, [companyId, result, setResult]);
+
+  const fraudNodes = useMemo(() => result?.fraud_graph?.nodes || [], [result]);
+  const fraudLinks = useMemo(() => result?.fraud_graph?.links || [], [result]);
 
   const shapData = Object.entries(explain?.shap_waterfall_data || {}).map(([feature, value]) => ({
     feature,
     value: Number(value),
     direction: Number(value) > 0 ? 'positive' : 'negative',
   }));
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[calc(100vh-56px)] bg-ob-bg">
+        <p className="text-ob-muted animate-pulse">Loading explanation data...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-ob-bg py-10 px-4 md:px-8">
@@ -47,19 +71,10 @@ export default function ExplainPage() {
           {/* SHAP Chart */}
           {shapData.length > 0 && <ShapChart data={shapData} />}
 
-          {/* Fraud Graph (if applicable) */}
-          <FraudGraph
-            nodes={[
-              { id: 'Company', type: 'company' },
-              { id: 'Entity B', type: 'counterparty' },
-              { id: 'Entity C', type: 'counterparty' },
-            ]}
-            links={[
-              { source: 'Company', target: 'Entity B', value: 40 },
-              { source: 'Entity B', target: 'Entity C', value: 38 },
-              { source: 'Entity C', target: 'Company', value: 39 },
-            ]}
-          />
+          {/* Fraud Graph — only shown if real data exists */}
+          {fraudNodes.length > 0 && (
+            <FraudGraph nodes={fraudNodes} links={fraudLinks} />
+          )}
         </div>
 
         {/* Right column — 45% */}
@@ -94,7 +109,11 @@ export default function ExplainPage() {
           <div className="bg-ob-surface border border-ob-edge rounded-[10px] p-5">
             <p className="text-[10px] font-medium tracking-[0.12em] uppercase text-ob-muted mb-2.5">Model Confidence</p>
             <p className="font-mono text-[28px] text-ob-text">
-              {explain?.model_confidence ? `${(Number(explain.model_confidence) * 100).toFixed(0)}%` : 'N/A'}
+              {explain?.confidence_in_decision 
+                ? `${(Number(explain.confidence_in_decision) * 100).toFixed(0)}%`
+                : result?.model_confidence_pct
+                ? `${Number(result.model_confidence_pct).toFixed(0)}%`
+                : 'N/A'}
             </p>
             <p className="text-[13px] text-ob-muted mt-2 leading-relaxed">
               Confidence is derived from the agreement between rule-based and ML scoring components.

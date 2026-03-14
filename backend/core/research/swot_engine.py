@@ -87,11 +87,12 @@ async def generate_swot(
 
     # Step 1: Sector macro context
     try:
-        macro_text = await asyncio.to_thread(
+        macro_resp = await asyncio.to_thread(
             llm_call,
             prompt=_MACRO_PROMPT.format(sector=sector),
             task="research",
         )
+        macro_text = macro_resp.text if hasattr(macro_resp, "text") else str(macro_resp)
     except Exception:
         macro_text = "Macro data unavailable."
 
@@ -113,7 +114,8 @@ async def generate_swot(
     # Step 3: Generate
     try:
         result = await asyncio.to_thread(llm_call, prompt=prompt, task="cam_narrative")
-        cleaned = re.sub(r"```json|```", "", result).strip()
+        raw_text = result.text if hasattr(result, "text") else str(result)
+        cleaned = re.sub(r"```json|```", "", raw_text).strip()
         return json.loads(cleaned)
     except Exception as e:
         logger.error(f"SWOT generation failed: {e}")

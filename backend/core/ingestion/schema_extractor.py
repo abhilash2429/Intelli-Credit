@@ -47,7 +47,8 @@ async def extract_with_schema(file_path: str, doc_type: str, schema: dict) -> di
     prompt = _PROMPT.format(schema_description=schema_desc, content=content[:10000])
 
     result = await asyncio.to_thread(llm_call, prompt=prompt, task="extraction")
+    raw_text = result.text if hasattr(result, "text") else str(result)
     try:
-        return json.loads(re.sub(r"```json|```", "", result).strip())
+        return json.loads(re.sub(r"```json|```", "", raw_text).strip())
     except Exception:
-        return {"error": "extraction_failed", "raw_snippet": result[:300]}
+        return {"error": "extraction_failed", "raw_snippet": raw_text[:300]}

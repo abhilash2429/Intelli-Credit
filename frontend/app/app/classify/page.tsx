@@ -18,7 +18,7 @@ const DOC_TYPES = [
 
 export default function ClassifyPage() {
   const router = useRouter();
-  const { companyId, companyName } = useAnalysisStore();
+  const { companyId } = useAnalysisStore();
   const [items, setItems] = useState<ClassificationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');

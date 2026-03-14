@@ -450,7 +450,8 @@ export interface LoanCreateInput {
 export async function createLoanApplication(
   payload: LoanCreateInput
 ): Promise<APIEnvelope<any>> {
-  const { data } = await api.post<APIEnvelope<any>>('/api/v1/loans', payload);
+  const { company_id, ...body } = payload;
+  const { data } = await api.post<APIEnvelope<any>>(`/api/v1/companies/${company_id}/loan`, body);
   return data;
 }
 

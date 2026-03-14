@@ -37,7 +37,7 @@ async def download_report(
         .limit(1)
     )
     cam = result.scalars().first()
-    if not cam or not cam.docx_path:
+    if not cam or not cam.docx_path:  # type: ignore[reportGeneralTypeIssues]
         return build_response(
             {
                 "company_id": company_id,
@@ -49,7 +49,7 @@ async def download_report(
             started_at=ctx.started_at,
         )
     return FileResponse(
-        cam.docx_path,
+        cam.docx_path,  # type: ignore[reportArgumentType]
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         filename="credit_appraisal_memo.docx",
     )
@@ -73,7 +73,7 @@ async def download_report_pdf(
         .limit(1)
     )
     cam = result.scalars().first()
-    if not cam or not cam.pdf_path:
+    if not cam or not cam.pdf_path:  # type: ignore[reportGeneralTypeIssues]
         return build_response(
             {
                 "company_id": company_id,
@@ -85,7 +85,7 @@ async def download_report_pdf(
             started_at=ctx.started_at,
         )
     return FileResponse(
-        cam.pdf_path,
+        cam.pdf_path,  # type: ignore[reportArgumentType]
         media_type="application/pdf",
         filename="credit_appraisal_memo.pdf",
     )

@@ -67,7 +67,7 @@ class ResearchToDelta:
                     max_tokens=1500,
                     messages=[{"role": "user", "content": prompt}],
                 )
-                text = response.content[0].text.strip()
+                text = response.content[0].text.strip()  # type: ignore[reportAttributeAccessIssue]
                 if text:
                     return text
             except Exception as exc:

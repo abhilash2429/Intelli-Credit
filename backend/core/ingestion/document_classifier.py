@@ -60,7 +60,8 @@ async def classify_document(file_path: str, filename: str) -> Tuple[str, float, 
     try:
         from backend.core.llm.llm_client import llm_call
         result = await asyncio.to_thread(llm_call, prompt=prompt, task="classification")
-        cleaned = re.sub(r"```json|```", "", result).strip()
+        raw_text = result.text if hasattr(result, "text") else str(result)
+        cleaned = re.sub(r"```json|```", "", raw_text).strip()
         parsed = json.loads(cleaned)
         doc_type = parsed.get("doc_type", "ANNUAL_REPORT")
         if doc_type not in DOC_TYPES:

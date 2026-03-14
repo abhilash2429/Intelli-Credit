@@ -48,7 +48,7 @@ class TavilyClient:
         # We always want raw content for extraction
         response = self.client.search(
             query=query,
-            search_depth=search_depth,
+            search_depth=search_depth,  # type: ignore[reportArgumentType]
             max_results=limit,
             include_raw_content=True,
         )

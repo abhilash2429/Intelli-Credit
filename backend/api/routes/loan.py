@@ -52,7 +52,7 @@ def _loan_to_dict(loan: LoanApplication) -> dict[str, Any]:
         "collateral_type": loan.collateral_type,
         "collateral_value_cr": loan.collateral_value_cr,
         "status": loan.status,
-        "created_at": loan.created_at.isoformat() if loan.created_at else None,
+        "created_at": loan.created_at.isoformat() if loan.created_at else None,  # type: ignore[reportGeneralTypeIssues]
     }
 
 

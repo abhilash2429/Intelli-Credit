@@ -54,7 +54,7 @@ export default function StartPage() {
         loan_tenor_months: Number(loan.tenure_months) || 0,
         loan_purpose: loan.purpose || undefined,
       });
-      const companyId = companyRes.data?.id;
+      const companyId = companyRes.data?.company_id;
       if (!companyId) throw new Error('No company ID returned');
 
       // Create loan application

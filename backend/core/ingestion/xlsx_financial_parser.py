@@ -46,7 +46,7 @@ def _find_row_value(
         if any(p.lower() in text for p in label_patterns):
             for col_off in range(value_col, min(value_col + 5, (sheet.max_column or 2) + 1)):
                 val = sheet.cell(row=row_idx, column=col_off).value
-                num = _safe_float(val, None)
+                num = _safe_float(val, None)  # type: ignore[reportArgumentType]
                 if num is not None and num != 0.0:
                     return num
             val = sheet.cell(row=row_idx, column=value_col).value
@@ -223,7 +223,7 @@ def parse_gst_xlsx(file_path: str) -> Dict[str, Any]:
         value_col = 2
         for col_idx in range(2, min((recon_sheet.max_column or 2) + 1, 10)):
             val = recon_sheet.cell(row=2, column=col_idx).value
-            if val is not None and _safe_float(val, None) is not None:
+            if val is not None and _safe_float(val, None) is not None:  # type: ignore[reportArgumentType]
                 value_col = col_idx
                 break
 

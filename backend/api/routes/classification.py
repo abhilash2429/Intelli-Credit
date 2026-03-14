@@ -39,7 +39,7 @@ def _clf_to_dict(clf: DocumentClassification, filename: str = "") -> dict[str, A
         "human_approved": clf.human_approved,
         "human_type_override": clf.human_type_override,
         "human_notes": clf.human_notes,
-        "reviewed_at": clf.reviewed_at.isoformat() if clf.reviewed_at else None,
+        "reviewed_at": clf.reviewed_at.isoformat() if clf.reviewed_at else None,  # type: ignore[reportGeneralTypeIssues]
         "custom_schema": clf.custom_schema,
         "has_extracted_data": clf.extracted_data is not None,
     }
@@ -106,19 +106,19 @@ async def update_classification(
     now = datetime.now(timezone.utc)
 
     if action == "approve":
-        clf.human_approved = True
-        clf.reviewed_at = now
+        clf.human_approved = True  # type: ignore[reportAttributeAccessIssue]
+        clf.reviewed_at = now  # type: ignore[reportAttributeAccessIssue]
     elif action == "reject":
-        clf.human_approved = False
-        clf.reviewed_at = now
+        clf.human_approved = False  # type: ignore[reportAttributeAccessIssue]
+        clf.reviewed_at = now  # type: ignore[reportAttributeAccessIssue]
     elif action == "override":
         new_type = payload.get("new_type", "").upper()
         if new_type not in VALID_DOC_TYPES:
             raise HTTPException(status_code=400, detail=f"Invalid doc type. Must be one of: {VALID_DOC_TYPES}")
         clf.human_type_override = new_type
-        clf.human_approved = True
-        clf.human_notes = payload.get("notes")
-        clf.reviewed_at = now
+        clf.human_approved = True  # type: ignore[reportAttributeAccessIssue]
+        clf.human_notes = payload.get("notes")  # type: ignore[reportAttributeAccessIssue]
+        clf.reviewed_at = now  # type: ignore[reportAttributeAccessIssue]
     elif action == "set_schema":
         schema = payload.get("schema")
         if not schema or not schema.get("fields"):
@@ -148,7 +148,7 @@ async def trigger_extraction(
     clf = await db.get(DocumentClassification, uuid.UUID(classification_id))
     if not clf or str(clf.company_id) != company_id:
         raise HTTPException(status_code=404, detail="Classification not found")
-    if not clf.custom_schema:
+    if not clf.custom_schema:  # type: ignore[reportGeneralTypeIssues]
         raise HTTPException(status_code=400, detail="Set a custom schema first via set_schema action")
     if clf.human_approved is False:
         raise HTTPException(status_code=400, detail="Cannot extract from a rejected document")
@@ -160,11 +160,11 @@ async def trigger_extraction(
     from backend.core.ingestion.schema_extractor import extract_with_schema
     effective_type = clf.human_type_override or clf.auto_type
     extracted = await extract_with_schema(
-        file_path=doc.file_path,
-        doc_type=effective_type,
-        schema=clf.custom_schema,
+        file_path=doc.file_path,  # type: ignore[reportArgumentType]
+        doc_type=effective_type,  # type: ignore[reportArgumentType]
+        schema=clf.custom_schema,  # type: ignore[reportArgumentType]
     )
-    clf.extracted_data = extracted
+    clf.extracted_data = extracted  # type: ignore[reportAttributeAccessIssue]
     await db.commit()
 
     return build_response(

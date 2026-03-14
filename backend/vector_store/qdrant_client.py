@@ -106,7 +106,7 @@ def search_chunks(
         if model is not None:
             try:
                 query_vector = model.encode(query).tolist()
-                results = client.search(
+                results = client.search(  # type: ignore[reportAttributeAccessIssue]
                     collection_name=collection,
                     query_vector=query_vector,
                     limit=top_k,

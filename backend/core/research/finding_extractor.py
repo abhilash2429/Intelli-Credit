@@ -100,7 +100,7 @@ class FindingExtractor:
                 max_tokens=2000,
                 messages=[{"role": "user", "content": prompt}],
             )
-            raw = response.content[0].text.strip()
+            raw = response.content[0].text.strip()  # type: ignore[reportAttributeAccessIssue]
             cleaned = self._strip_fences(raw)
             parsed = json.loads(cleaned)
             out = []

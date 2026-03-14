@@ -104,7 +104,7 @@ class IntelliCreditPipeline:
                     db,
                     latest,
                     status="error",
-                    step=latest.current_step or "UNKNOWN",
+                    step=latest.current_step or "UNKNOWN",  # type: ignore[reportArgumentType]
                     message=f"Pipeline failed: {exc}",
                     error_message=str(exc),
                 )
@@ -205,9 +205,9 @@ class IntelliCreditPipeline:
         )
         promoters = self._extract_promoters(due)
         research_bundle = await self.research_agent.run(
-            company_name=company.name,
-            sector=company.sector or "other",
-            cin=company.cin,
+            company_name=company.name,  # type: ignore[reportArgumentType]
+            sector=company.sector or "other",  # type: ignore[reportArgumentType]
+            cin=company.cin,  # type: ignore[reportArgumentType]
             gstin=getattr(company, "gstin", None),
             promoter_names=promoters,
         )
@@ -216,7 +216,7 @@ class IntelliCreditPipeline:
         due_payload = self._due_payload(due)
         due_raw_payload = due.payload if (due and isinstance(due.payload, dict)) else {}
         research_summary = self._summarize_research(research_bundle.findings, research_bundle.mca_report)
-        research_summary["cibil_commercial_score"] = get_mock_cibil_score(company.name)
+        research_summary["cibil_commercial_score"] = get_mock_cibil_score(company.name)  # type: ignore[reportArgumentType]
         research_narrative = self.research_narrative.generate_cam_section(
             {
                 "company_name": company.name,
@@ -227,7 +227,7 @@ class IntelliCreditPipeline:
         )
         self._persist_research_to_delta(
             company_id=company_id,
-            company_name=company.name,
+            company_name=company.name,  # type: ignore[reportArgumentType]
             findings=research_bundle.findings,
             research_summary=research_summary,
             research_job_id=getattr(research_bundle, "research_job_id", ""),
@@ -253,11 +253,11 @@ class IntelliCreditPipeline:
             from backend.core.research.swot_engine import generate_swot
 
             swot_result = await generate_swot(
-                company_name=company.name,
-                sector=company.sector or "other",
-                loan_amount_cr=float(loan_app.loan_amount_cr if loan_app else 30.0),
-                loan_type=loan_app.loan_type if loan_app else "term_loan",
-                tenure_months=int(loan_app.tenure_months if loan_app else 36),
+                company_name=company.name,  # type: ignore[reportArgumentType]
+                sector=company.sector or "other",  # type: ignore[reportArgumentType]
+                loan_amount_cr=float(loan_app.loan_amount_cr if loan_app else 30.0),  # type: ignore[reportArgumentType]
+                loan_type=loan_app.loan_type if loan_app else "term_loan",  # type: ignore[reportArgumentType]
+                tenure_months=int(loan_app.tenure_months if loan_app else 36),  # type: ignore[reportArgumentType]
                 extracted_financials=parsed_financials.get("financials", {}),
                 research_findings=research_bundle.findings,
             )
@@ -324,7 +324,7 @@ class IntelliCreditPipeline:
             self.scorer.predict,
             features,
             requested_loan_amount=float(getattr(company, "loan_amount_requested", 30.0) or 30.0),
-            sector=company.sector or "other",
+            sector=company.sector or "other",  # type: ignore[reportArgumentType]
             loan_type="secured",
         )
         explanation = await asyncio.to_thread(self.explainer.generate_explanation, features)
@@ -396,7 +396,7 @@ class IntelliCreditPipeline:
 
         # Build fraud fingerprinting graph with multi-signal corroboration
         fraud_graph = self.cross_validator.build_fraud_graph(
-            company_name=company.name,
+            company_name=company.name,  # type: ignore[reportArgumentType]
             bank_metrics=bank_metrics,
             research_findings=research_bundle.findings,
             gst_mismatch=gst_payload.get("mismatch_report"),
@@ -408,7 +408,7 @@ class IntelliCreditPipeline:
             "explanation": explanation.model_dump(),
             "features": features,
             "cross_validation": cross_report.model_dump(),
-            "gst_mismatch": gst_payload.get("mismatch_report").model_dump()
+            "gst_mismatch": gst_payload.get("mismatch_report").model_dump()  # type: ignore[reportOptionalMemberAccess]
             if gst_payload.get("mismatch_report")
             else None,
             "gst_xlsx_data": gst_xlsx_data,
@@ -533,7 +533,7 @@ class IntelliCreditPipeline:
 
         for doc in documents:
             path = doc.file_path
-            if not path:
+            if not path:  # type: ignore[reportGeneralTypeIssues]
                 continue
             low = path.lower()
 
@@ -546,14 +546,14 @@ class IntelliCreditPipeline:
             # Route type-specific classified docs to specialized parsers
             if doc_type in ("ALM_STATEMENT", "ALM"):
                 try:
-                    alm_data = await parse_alm_statement(path)
+                    alm_data = await parse_alm_statement(path)  # type: ignore[reportArgumentType]
                     logger.info("pipeline.alm_parsed", gap=alm_data.get("structural_liquidity_gap_cr"))
                 except Exception as exc:
                     logger.warning("pipeline.alm_parse_failed", error=str(exc))
                 continue
             elif doc_type in ("SHAREHOLDING", "SHAREHOLDING_PATTERN"):
                 try:
-                    sh_data = await parse_shareholding_pattern(path)
+                    sh_data = await parse_shareholding_pattern(path)  # type: ignore[reportArgumentType]
                     shareholding_data.update(sh_data)
                     logger.info("pipeline.shareholding_parsed", promoter=shareholding_data.get("promoter_holding_pct"))
                 except Exception as exc:
@@ -561,14 +561,14 @@ class IntelliCreditPipeline:
                 continue
             elif doc_type in ("BORROWING_PROFILE", "BORROWING"):
                 try:
-                    borrowing_data = await parse_borrowing_profile(path)
+                    borrowing_data = await parse_borrowing_profile(path)  # type: ignore[reportArgumentType]
                     logger.info("pipeline.borrowing_parsed", debt=borrowing_data.get("total_outstanding_cr"))
                 except Exception as exc:
                     logger.warning("pipeline.borrowing_parse_failed", error=str(exc))
                 continue
             elif doc_type in ("PORTFOLIO", "PORTFOLIO_QUALITY"):
                 try:
-                    portfolio_data = await parse_portfolio_performance(path)
+                    portfolio_data = await parse_portfolio_performance(path)  # type: ignore[reportArgumentType]
                     logger.info("pipeline.portfolio_parsed", gnpa=portfolio_data.get("gnpa_pct"))
                 except Exception as exc:
                     logger.warning("pipeline.portfolio_parse_failed", error=str(exc))
@@ -582,31 +582,31 @@ class IntelliCreditPipeline:
                 or low.endswith(".jpeg")
                 or low.endswith(".png")
             ):
-                parsed = await asyncio.to_thread(self.pdf_parser.parse, path)
+                parsed = await asyncio.to_thread(self.pdf_parser.parse, path)  # type: ignore[reportArgumentType]
                 financial_docs.append(parsed)
             elif low.endswith(".json") or low.endswith(".xml"):
                 if "gstr" in low:
-                    bundle = await asyncio.to_thread(self.gst_parser.parse_file, path)
+                    bundle = await asyncio.to_thread(self.gst_parser.parse_file, path)  # type: ignore[reportArgumentType]
                     gstr3b = bundle.gstr3b or gstr3b
                     gstr2a = bundle.gstr2a or gstr2a
                     gstr1 = bundle.gstr1 or gstr1
                 elif "itr" in low:
-                    itr_data = await asyncio.to_thread(self.itr_parser.parse, path)
+                    itr_data = await asyncio.to_thread(self.itr_parser.parse, path)  # type: ignore[reportArgumentType]
             elif low.endswith(".csv") or low.endswith(".xlsx") or low.endswith(".xls"):
-                xlsx_type = detect_xlsx_type(path)
+                xlsx_type = detect_xlsx_type(path)  # type: ignore[reportArgumentType]
                 if xlsx_type == "financial_statement":
-                    xlsx_financials = await asyncio.to_thread(parse_financial_statement_xlsx, path)
+                    xlsx_financials = await asyncio.to_thread(parse_financial_statement_xlsx, path)  # type: ignore[reportArgumentType]
                     logger.info("pipeline.xlsx_financial_parsed", dscr=xlsx_financials.get("dscr"))
                 elif xlsx_type == "gst_returns":
-                    gst_xlsx_data = await asyncio.to_thread(parse_gst_xlsx, path)
+                    gst_xlsx_data = await asyncio.to_thread(parse_gst_xlsx, path)  # type: ignore[reportArgumentType]
                     logger.info("pipeline.xlsx_gst_parsed", itc_gap=gst_xlsx_data.get("itc_mismatch_pct"))
                 elif xlsx_type == "shareholding":
-                    shareholding_data = await asyncio.to_thread(parse_shareholding_xlsx, path)
+                    shareholding_data = await asyncio.to_thread(parse_shareholding_xlsx, path)  # type: ignore[reportArgumentType]
                     logger.info("pipeline.xlsx_shareholding_parsed", pledge=shareholding_data.get("promoter_pledge_pct"))
                 else:
                     bank_metrics = await asyncio.to_thread(
                         self.bank_analyzer.analyze,
-                        path,
+                        path,  # type: ignore[reportArgumentType]
                         annual_revenue=20.0,
                         gst_turnover=20.0,
                     )

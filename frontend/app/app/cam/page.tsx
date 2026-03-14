@@ -11,20 +11,21 @@ export default function CamPage() {
   const [docxReady, setDocxReady] = useState(false);
   const [pdfReady, setPdfReady] = useState(false);
   const [loading, setLoading] = useState(true);
-  const { companyId, companyName } = useAnalysisStore();
+  const { companyId, companyName, setResult } = useAnalysisStore();
   const router = useRouter();
 
   useEffect(() => {
     if (!companyId) return;
     getResultsV1(companyId)
-      .then((res) => {
+      .then((res: any) => {
+        setResult(res.data);
         setCamText(String(res.data?.explanation?.decision_narrative || ''));
         setDocxReady(Boolean(res.data?.cam_docx_path));
         setPdfReady(Boolean(res.data?.cam_pdf_path));
       })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [companyId]);
+  }, [companyId, setResult]);
 
   if (loading) {
     return (

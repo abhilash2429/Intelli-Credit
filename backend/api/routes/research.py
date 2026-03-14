@@ -43,7 +43,7 @@ async def get_research_findings(
             "summary": r.summary,
             "severity": r.severity,
             "confidence": r.confidence,
-            "date_of_finding": r.date_of_finding.isoformat() if r.date_of_finding else None,
+            "date_of_finding": r.date_of_finding.isoformat() if r.date_of_finding else None,  # type: ignore[reportGeneralTypeIssues]
             "raw_snippet": r.raw_snippet,
         }
         for r in rows

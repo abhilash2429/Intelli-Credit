@@ -1,5 +1,5 @@
 """
-Research orchestration with live Firecrawl support and deterministic fallback.
+Research orchestration with Crawl4AI-powered scraping, live Tavily search, and deterministic fallback.
 """
 
 from __future__ import annotations
@@ -12,6 +12,7 @@ from typing import List, Optional
 
 from backend.config import settings
 from backend.core.india_context import red_flag_keywords
+from backend.core.research.crawl4ai_scraper import Crawl4AIScraper
 from backend.core.research.ecourt_scraper import ECourtsScraper
 from backend.core.research.finding_extractor import FindingExtractor
 from backend.core.research.tavily_client import TavilyClient
@@ -23,7 +24,7 @@ from backend.schemas.credit import FindingType, MCAReport, ResearchFinding, Seve
 
 logger = get_logger(__name__)
 
-AGENT_TOOLS = ["tavily_search", "mca_lookup", "court_search", "news_search", "keyword_scan"]
+AGENT_TOOLS = ["crawl4ai_scrape", "tavily_search", "mca_lookup", "court_search", "news_search", "keyword_scan"]
 
 RESEARCH_CHECKLIST = [
     "Search fraud/default/enforcement actions",
@@ -45,7 +46,7 @@ class ResearchBundle:
 class WebResearchAgent:
     """
     Hybrid research agent.
-    - `RESEARCH_MODE=live`: Tavily + Claude extraction
+    - `RESEARCH_MODE=live`: Crawl4AI + Tavily + LLM extraction
     - otherwise: deterministic scrapers/mock intelligence
     """
 
@@ -54,6 +55,7 @@ class WebResearchAgent:
         self.ecourts_scraper = ECourtsScraper()
         self.news_scraper = NewsScraper()
         self.finding_extractor = FindingExtractor()
+        self.crawl4ai = Crawl4AIScraper()
         self.live_mode = settings.research_mode.lower() == "live"
         self.tavily_client = None
         if self.live_mode and settings.tavily_api_key:
@@ -137,7 +139,7 @@ class WebResearchAgent:
                     return
                 try:
                     results = await asyncio.to_thread(
-                        self.tavily_client.search,
+                        self.tavily_client.search,  # type: ignore[reportOptionalMemberAccess]
                         q["query"],
                         num_results=min(
                             settings.max_tavily_results_per_search,
@@ -171,26 +173,40 @@ class WebResearchAgent:
             fallback.extend(self._infer_regulatory_findings(company_name, sector))
             return fallback
 
-        findings: List[ResearchFinding] = []
-        sources_seen = 0
+        # Gather unique URLs to deep-scrape with Crawl4AI
+        url_to_meta: dict[str, tuple[dict, dict]] = {}
         for query_meta, results in query_results:
             for result in results:
-                if sources_seen >= settings.max_research_sources_per_company:
-                    break
                 url = result.get("url", "")
-                content = result.get("markdown", "")
-                if not url or not content or self._is_excluded_domain(url):
-                    continue
+                if url and not self._is_excluded_domain(url) and url not in url_to_meta:
+                    url_to_meta[url] = (query_meta, result)
 
-                extracted = await asyncio.to_thread(
-                    self.finding_extractor.extract,
-                    raw_content=content,
-                    url=url,
-                    search_query=query_meta["query"],
-                    company_name=company_name,
-                )
-                sources_seen += 1
-                findings.extend([self._to_research_finding(item) for item in extracted])
+        # Limit total URLs to avoid overwhelming crawl budget
+        all_urls = list(url_to_meta.keys())[:settings.max_research_sources_per_company]
+        logger.info("research.crawl4ai.scraping", urls=len(all_urls), company=company_name)
+
+        # Use Crawl4AI to scrape all URLs in batch
+        scraped_contents = await self.crawl4ai.scrape_urls(all_urls, max_concurrency=4)
+        logger.info("research.crawl4ai.done", scraped=sum(1 for v in scraped_contents.values() if v))
+
+        findings: List[ResearchFinding] = []
+        for url, content in scraped_contents.items():
+            if not content:
+                # Fall back to Tavily's own snippet if Crawl4AI failed
+                _, result = url_to_meta[url]
+                content = result.get("markdown", "") or result.get("content", "")
+            if not content:
+                continue
+
+            query_meta, _ = url_to_meta[url]
+            extracted = await asyncio.to_thread(
+                self.finding_extractor.extract,
+                raw_content=content,
+                url=url,
+                search_query=query_meta["query"],
+                company_name=company_name,
+            )
+            findings.extend([self._to_research_finding(item) for item in extracted])
 
         return findings
 

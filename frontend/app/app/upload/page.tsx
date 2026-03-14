@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import UploadZone from '@/components/UploadZone';
 import { useAnalysisStore } from '@/store/analysisStore';
@@ -87,7 +87,7 @@ export default function UploadPage() {
     inventoryLevel !== 'ADEQUATE' || managementCooperation !== 'COOPERATIVE'
   );
 
-  const buildDueDiligenceNotes = () => {
+  const buildDueDiligenceNotes = useCallback(() => {
     return [
       `Borrower finance officer name: ${financeOfficerName || 'Not provided'}`,
       `Role: ${financeOfficerRole || 'Not provided'}`,
@@ -99,7 +99,10 @@ export default function UploadPage() {
       `Contingent liabilities: ${contingentLiabilities || 'Not provided'}`,
       `Planned capex / expansion: ${plannedCapex || 'Not provided'}`,
     ].join('\n');
-  };
+  }, [
+    financeOfficerName, financeOfficerRole, financeOfficerEmail, financeOfficerPhone,
+    businessHighlights, keyRisksDisclosed, majorCustomers, contingentLiabilities, plannedCapex,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -114,7 +117,7 @@ export default function UploadPage() {
     }, 450);
     return () => { cancelled = true; clearTimeout(timer); };
   }, [
-    hasOptionalInputs, companyName, financeOfficerName, financeOfficerRole,
+    hasOptionalInputs, companyName, buildDueDiligenceNotes, financeOfficerName, financeOfficerRole,
     financeOfficerEmail, financeOfficerPhone, capacityPct, inventoryLevel,
     managementCooperation, businessHighlights, keyRisksDisclosed,
     majorCustomers, contingentLiabilities, plannedCapex,

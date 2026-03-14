@@ -255,7 +255,7 @@ class CrossValidator:
                 snippet = finding.get("raw_snippet", "")
             summary = ""
             if hasattr(finding, "summary"):
-                summary = finding.summary
+                summary = finding.summary  # type: ignore[reportAttributeAccessIssue]
             elif isinstance(finding, dict):
                 summary = finding.get("summary", "")
 

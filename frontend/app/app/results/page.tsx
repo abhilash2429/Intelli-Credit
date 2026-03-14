@@ -78,12 +78,14 @@ export default function ResultsPage() {
           setResearch(researchRes?.data || []);
         }
 
-        // Fetch SWOT
+        // Fetch SWOT — try dedicated endpoint first, fall back to result payload
         try {
           const swotRes = await getSwotV1(companyId);
           if (!cancelled) setSwot(swotRes.data);
         } catch {
-          // SWOT may not exist yet
+          // SWOT not in DB — check if embedded in the result payload
+          const embedded = latestResult?.swot_data || latestResult?.swot || null;
+          if (!cancelled && embedded) setSwot(embedded);
         }
       } catch (err) {
         console.error(err);

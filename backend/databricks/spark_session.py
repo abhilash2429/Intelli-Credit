@@ -19,7 +19,7 @@ def _create_databricks_remote_session() -> SparkSession:
         raise RuntimeError(
             "Databricks credentials are required (DATABRICKS_HOST, DATABRICKS_TOKEN, DATABRICKS_CLUSTER_ID)"
         )
-    from databricks.connect import DatabricksSession
+    from databricks.connect import DatabricksSession  # type: ignore[reportPrivateImportUsage]
 
     return (
         DatabricksSession.builder.remote(
@@ -42,7 +42,7 @@ def get_spark() -> SparkSession:
         os.makedirs(settings.delta_lake_path, exist_ok=True)
         logger.info("spark.session.create", mode="local", delta_path=settings.delta_lake_path)
         builder = (
-            SparkSession.builder.appName("IntelliCredit")
+            SparkSession.builder.appName("IntelliCredit")  # type: ignore[reportAttributeAccessIssue]
             .master("local[*]")
             .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension")
             .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog")
@@ -75,7 +75,7 @@ def get_spark() -> SparkSession:
     else:
         logger.info("spark.session.create", mode="databricks", host=settings.databricks_host)
         try:
-            from databricks.connect import DatabricksSession
+            from databricks.connect import DatabricksSession  # type: ignore[reportPrivateImportUsage]
         except Exception as exc:
             raise RuntimeError(
                 "databricks-connect is required when SPARK_LOCAL_MODE=false"

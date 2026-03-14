@@ -92,7 +92,7 @@ async def stream_status(company_id: str):
                 }
                 yield f"data: {json.dumps(state)}\n\n"
                 if run.status in {"completed", "error"}:
-                    yield f"data: {json.dumps({'type': 'complete' if run.status == 'completed' else 'error'})}\n\n"
+                    yield f"data: {json.dumps({'type': 'complete' if run.status == 'completed' else 'error'})}\n\n"  # type: ignore[reportGeneralTypeIssues]
                     break
             elif company_id in _active_tasks:
                 yield f"data: {json.dumps({'type': 'status', 'status': 'processing', 'step': 'INITIALIZING', 'progress_pct': 0})}\n\n"
@@ -125,7 +125,7 @@ async def get_results(
             request_id=ctx.request_id,
             started_at=ctx.started_at,
         )
-    if run.status == "error":
+    if run.status == "error":  # type: ignore[reportGeneralTypeIssues]
         return build_response(
             {
                 "company_id": company_id,
@@ -138,7 +138,7 @@ async def get_results(
             request_id=ctx.request_id,
             started_at=ctx.started_at,
         )
-    if run.status != "completed":
+    if run.status != "completed":  # type: ignore[reportGeneralTypeIssues]
         return build_response(
             {
                 "company_id": company_id,
@@ -180,7 +180,7 @@ async def get_explanation(
             request_id=ctx.request_id,
             started_at=ctx.started_at,
         )
-    if run.status != "completed" or not run.result_payload:
+    if run.status != "completed" or not run.result_payload:  # type: ignore[reportGeneralTypeIssues]
         return build_response(
             {
                 "company_id": company_id,
@@ -230,7 +230,7 @@ async def get_swot(
             "macro_signals": swot.macro_signals or {},
             "investment_thesis": swot.investment_thesis,
             "recommendation": swot.recommendation,
-            "generated_at": swot.created_at.isoformat() if swot.created_at else None,
+            "generated_at": swot.created_at.isoformat() if swot.created_at else None,  # type: ignore[reportGeneralTypeIssues]
         },
         request_id=ctx.request_id,
         started_at=ctx.started_at,

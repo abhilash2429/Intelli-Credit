@@ -164,7 +164,7 @@ class IntelliCreditPDFParser:
         text_chunks: List[str] = []
         with fitz.open(file_path) as doc:
             for page in doc:
-                text_chunks.append(page.get_text("text") or "")
+                text_chunks.append(page.get_text("text") or "")  # type: ignore[reportArgumentType]
         return "\n".join(text_chunks).strip()
 
     def _extract_with_pdfplumber(self, file_path: str) -> str:

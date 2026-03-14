@@ -4,4 +4,4 @@
 -r backend/requirements.txt
 
 # ML training extras
-matplotlib==3.9.0
+matplotlib>=3.9.0

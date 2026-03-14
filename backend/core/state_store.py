@@ -79,17 +79,17 @@ async def update_run(
     error_message: Optional[str] = None,
 ) -> AnalysisRun:
     if status is not None:
-        run.status = status
+        run.status = status  # type: ignore[reportAttributeAccessIssue]
     if step is not None:
-        run.current_step = step
+        run.current_step = step  # type: ignore[reportAttributeAccessIssue]
     if progress_pct is not None:
-        run.progress_pct = progress_pct
+        run.progress_pct = progress_pct  # type: ignore[reportAttributeAccessIssue]
     if message is not None and step is not None:
-        run.audit_log = _append_log(run.audit_log, message, step)
+        run.audit_log = _append_log(run.audit_log, message, step)  # type: ignore[reportArgumentType, reportAttributeAccessIssue]
     if result_payload is not None:
-        run.result_payload = _json_safe(result_payload)
+        run.result_payload = _json_safe(result_payload)  # type: ignore[reportAttributeAccessIssue]
     if error_message is not None:
-        run.error_message = error_message
+        run.error_message = error_message  # type: ignore[reportAttributeAccessIssue]
 
     db.add(run)
     await db.commit()

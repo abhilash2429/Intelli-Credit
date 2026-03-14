@@ -73,7 +73,7 @@ async def submit_due_diligence(
         raise HTTPException(status_code=404, detail="Company not found")
 
     enriched_notes = _build_enriched_notes(payload)
-    insight = await _analyzer.analyze(company.name, enriched_notes)
+    insight = await _analyzer.analyze(company.name, enriched_notes)  # type: ignore[reportArgumentType]
     payload_json = payload.model_dump(mode="json")
     insight_json = insight.model_dump(mode="json")
 

@@ -61,7 +61,8 @@ async def parse_portfolio_performance(file_path: str) -> dict:
     from backend.core.llm.llm_client import llm_call
     text = _extract_text(file_path)
     result = await asyncio.to_thread(llm_call, prompt=_PROMPT.format(text=text[:9000]), task="extraction")
+    raw_text = result.text if hasattr(result, "text") else str(result)
     try:
-        return json.loads(re.sub(r"```json|```", "", result).strip())
+        return json.loads(re.sub(r"```json|```", "", raw_text).strip())
     except Exception:
-        return {"error": "parse_failed", "extraction_confidence": 0.0, "raw_snippet": result[:300]}
+        return {"error": "parse_failed", "extraction_confidence": 0.0, "raw_snippet": raw_text[:300]}

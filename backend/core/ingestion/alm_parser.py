@@ -51,13 +51,14 @@ Document text:
 
 async def parse_alm_statement(file_path: str) -> dict:
     text = _extract_text(file_path)
-    from backend.core.llm.llm_client import llm_call
-    result = await asyncio.to_thread(llm_call, prompt=_PROMPT.format(text=text[:9000]), task="extraction")
+    from backend.core.llm.llm_client import llm_call, LLMResponse
+    result: LLMResponse = await asyncio.to_thread(llm_call, prompt=_PROMPT.format(text=text[:9000]), task="extraction")
+    raw_text: str = result.text
     try:
-        return json.loads(re.sub(r"```json|```", "", result).strip())
+        return json.loads(re.sub(r"```json|```", "", raw_text).strip())
     except Exception:
         logger.warning("ALM parse failed — returning raw partial")
-        return {"error": "parse_failed", "extraction_confidence": 0.0, "raw_snippet": result[:300]}
+        return {"error": "parse_failed", "extraction_confidence": 0.0, "raw_snippet": raw_text[:300]}
 
 
 def _extract_text(file_path: str) -> str:

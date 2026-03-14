@@ -66,7 +66,7 @@ async def _build_context(
         .limit(1)
     )
     cam = latest_cam.scalars().first()
-    if cam and cam.cam_text:
+    if cam and cam.cam_text:  # type: ignore[reportGeneralTypeIssues]
         parts.append(f"Latest CAM narrative:\n{cam.cam_text[:2500]}")
 
     latest_risk = await db.execute(
@@ -144,18 +144,25 @@ QUESTION:
 """
 
     try:
-        response = llm_call(prompt, task="chat_rag", max_tokens=900)
+        # Prefer Gemini for chat — it handles long CAM context well
+        use_gemini = bool(settings.gemini_api_key)
+        response = llm_call(
+            prompt,
+            task="chat_rag",
+            max_tokens=1200,
+            force_provider="gemini" if use_gemini else None,
+        )
         answer = response.text
         model_info = {
             "provider": response.provider,
             "model": response.model_used,
             "fallback_triggered": response.fallback_triggered,
             "latency_ms": response.latency_ms,
-            "gemini_enabled": bool(settings.gemini_api_key),
+            "gemini_enabled": use_gemini,
         }
     except Exception as exc:
         answer = _fallback_answer(message, context)
-        model_info = {"error": str(exc)}
+        model_info = {"error": str(exc), "gemini_enabled": bool(settings.gemini_api_key)}
 
     try:
         db.add(

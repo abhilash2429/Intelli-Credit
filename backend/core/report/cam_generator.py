@@ -62,11 +62,11 @@ class CAMGenerator:
 
         filename = f"CAM_{company.get('name', 'company').replace(' ', '_')}_{date.today().isoformat()}.docx"
         path = self.output_dir / filename
-        doc.save(path)
+        doc.save(path)  # type: ignore[reportArgumentType]
         return str(path)
 
     @staticmethod
-    def _apply_styles(doc: Document) -> None:
+    def _apply_styles(doc: Document) -> None:  # type: ignore[reportGeneralTypeIssues]
         if "Heading 1" in doc.styles:
             h1 = doc.styles["Heading 1"]
             h1.font.color.rgb = RGBColor(15, 44, 88)
@@ -80,7 +80,7 @@ class CAMGenerator:
             h2.font.bold = True
 
     @staticmethod
-    def _header(doc: Document) -> None:
+    def _header(doc: Document) -> None:  # type: ignore[reportGeneralTypeIssues]
         p = doc.add_paragraph()
         p.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
         run = p.add_run("CREDIT APPRAISAL MEMORANDUM")
@@ -97,14 +97,14 @@ class CAMGenerator:
         doc.add_paragraph(f"Date: {date.today().isoformat()} | Logo: [BANK LOGO PLACEHOLDER]")
 
     @staticmethod
-    def _toc_placeholder(doc: Document) -> None:
+    def _toc_placeholder(doc: Document) -> None:  # type: ignore[reportGeneralTypeIssues]
         doc.add_heading("Table of Contents", level=1)
         for section in CAM_SECTION_ORDER:
             doc.add_paragraph(section)
         doc.add_page_break()
 
     @staticmethod
-    def _section_executive_summary(doc: Document, company: Dict[str, Any], decision: Dict[str, Any]) -> None:
+    def _section_executive_summary(doc: Document, company: Dict[str, Any], decision: Dict[str, Any]) -> None:  # type: ignore[reportGeneralTypeIssues]
         doc.add_heading("SECTION 1: EXECUTIVE SUMMARY", level=1)
         doc.add_paragraph(
             f"Company: {company.get('name')} | CIN: {company.get('cin', 'N/A')} | Sector: {company.get('sector')}"
@@ -132,7 +132,7 @@ class CAMGenerator:
 
     @staticmethod
     def _section_borrower_profile(
-        doc: Document,
+        doc: Document,  # type: ignore[reportGeneralTypeIssues]
         company: Dict[str, Any],
         due_diligence: Dict[str, Any],
         borrower_context: Dict[str, Any],
@@ -169,11 +169,11 @@ class CAMGenerator:
         doc.add_paragraph(f"Borrower-declared risks: {risks}")
         if due_diligence.get("factory_capacity_utilization") is not None:
             doc.add_paragraph(
-                f"Declared capacity utilization: {float(due_diligence.get('factory_capacity_utilization')):.1f}%"
+                f"Declared capacity utilization: {float(due_diligence.get('factory_capacity_utilization')):.1f}%"  # type: ignore[reportArgumentType]
             )
 
     @staticmethod
-    def _section_five_cs(doc: Document, features: Dict[str, float]) -> None:
+    def _section_five_cs(doc: Document, features: Dict[str, float]) -> None:  # type: ignore[reportGeneralTypeIssues]
         doc.add_heading("SECTION 3: THE FIVE Cs ANALYSIS", level=1)
         five_c = analyze_five_cs(features)
         labels = [
@@ -190,7 +190,7 @@ class CAMGenerator:
 
     @staticmethod
     def _section_financial_analysis(
-        doc: Document,
+        doc: Document,  # type: ignore[reportGeneralTypeIssues]
         features: Dict[str, float],
         cross_validation: Dict[str, Any],
     ) -> None:
@@ -213,7 +213,7 @@ class CAMGenerator:
 
     @staticmethod
     def _section_risk_assessment(
-        doc: Document,
+        doc: Document,  # type: ignore[reportGeneralTypeIssues]
         explanation: Dict[str, Any],
         cross_validation: Dict[str, Any],
     ) -> None:
@@ -235,7 +235,7 @@ class CAMGenerator:
 
     @staticmethod
     def _section_research(
-        doc: Document,
+        doc: Document,  # type: ignore[reportGeneralTypeIssues]
         findings: List[Dict[str, Any]],
         research_narrative: str | None,
     ) -> None:
@@ -251,7 +251,7 @@ class CAMGenerator:
 
     @staticmethod
     def _section_recommendation(
-        doc: Document,
+        doc: Document,  # type: ignore[reportGeneralTypeIssues]
         decision: Dict[str, Any],
         explanation: Dict[str, Any],
         due_diligence: Dict[str, Any],
@@ -285,7 +285,7 @@ class CAMGenerator:
         doc.add_paragraph(explanation.get("decision_narrative", "No narrative available"))
 
     @staticmethod
-    def _section_mitigants(doc: Document) -> None:
+    def _section_mitigants(doc: Document) -> None:  # type: ignore[reportGeneralTypeIssues]
         doc.add_heading("SECTION 8: RISK MITIGANTS & CONDITIONS", level=1)
         doc.add_paragraph("- Monthly stock and receivable statements")
         doc.add_paragraph("- Quarterly GST-banking reconciliation")
@@ -293,7 +293,7 @@ class CAMGenerator:
 
     @staticmethod
     def _section_annexures(
-        doc: Document,
+        doc: Document,  # type: ignore[reportGeneralTypeIssues]
         findings: List[Dict[str, Any]],
         explanation: Dict[str, Any],
         due_diligence: Dict[str, Any],
@@ -323,7 +323,7 @@ class CAMGenerator:
         )
 
     @staticmethod
-    def _add_footer_page_number(doc: Document) -> None:
+    def _add_footer_page_number(doc: Document) -> None:  # type: ignore[reportGeneralTypeIssues]
         section = doc.sections[0]
         footer = section.footer
         p = footer.paragraphs[0] if footer.paragraphs else footer.add_paragraph()

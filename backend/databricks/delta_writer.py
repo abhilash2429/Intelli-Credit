@@ -82,9 +82,9 @@ class DeltaWriter:
 
         condition = " AND ".join([f"target.{k} = source.{k}" for k in merge_keys])
         table = (
-            DeltaTable.forPath(self.spark, target)
+            DeltaTable.forPath(self.spark, target)  # type: ignore[reportOptionalMemberAccess]
             if self.local_mode
-            else DeltaTable.forName(self.spark, target)
+            else DeltaTable.forName(self.spark, target)  # type: ignore[reportOptionalMemberAccess]
         )
         logger.info("delta.upsert.start", table=table_name, keys=merge_keys)
         (
@@ -99,9 +99,9 @@ class DeltaWriter:
     def _table_exists(self, target: str) -> bool:
         try:
             if self.local_mode:
-                DeltaTable.forPath(self.spark, target)
+                DeltaTable.forPath(self.spark, target)  # type: ignore[reportOptionalMemberAccess]
             else:
-                DeltaTable.forName(self.spark, target)
+                DeltaTable.forName(self.spark, target)  # type: ignore[reportOptionalMemberAccess]
             return True
         except Exception:
             return False

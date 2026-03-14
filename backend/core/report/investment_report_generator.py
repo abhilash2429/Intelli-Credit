@@ -150,8 +150,8 @@ async def generate_investment_report(company_id: str, db: AsyncSession) -> str:
     _heading(doc, "§3 Documents Analysed & Classification", 1)
     for clf in classifications:
         etype = clf.human_type_override or clf.auto_type
-        status_str = "✓ APPROVED" if clf.human_approved else "PENDING"
-        if clf.human_type_override:
+        status_str = "✓ APPROVED" if clf.human_approved else "PENDING"  # type: ignore[reportGeneralTypeIssues]
+        if clf.human_type_override:  # type: ignore[reportGeneralTypeIssues]
             status_str += f" (overridden from {clf.auto_type})"
         doc.add_paragraph(
             f"  • {etype} — {status_str} | Auto-confidence: {clf.auto_confidence:.0%} | {clf.auto_reasoning or ''}",

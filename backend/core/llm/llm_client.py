@@ -86,8 +86,8 @@ def _call_gemini(prompt: str, max_tokens: int = 2000) -> str:
     if not api_key:
         raise RuntimeError("GEMINI_API_KEY is not configured")
 
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel(
+    genai.configure(api_key=api_key)  # type: ignore[reportPrivateImportUsage]
+    model = genai.GenerativeModel(  # type: ignore[reportPrivateImportUsage]
         GEMINI_MODEL,
         system_instruction=SYSTEM_PROMPT,
     )

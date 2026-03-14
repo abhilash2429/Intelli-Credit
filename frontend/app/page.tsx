@@ -117,101 +117,71 @@ export default function HeroPage() {
           </div>
         </div>
 
-        {/* RIGHT — stacked cards */}
+        {/* RIGHT — feature highlights */}
         <div className={`w-full lg:w-[360px] shrink-0 flex flex-col gap-[10px] pt-1 transition-all duration-1000 delay-300 transform ${mounted ? 'translate-y-0 opacity-100' : 'translate-y-6 opacity-0'}`}>
-          {/* Score */}
+          {/* Pipeline coverage */}
           <div className="bg-ob-glass border border-ob-edge rounded-[12px] p-[20px] backdrop-blur-[28px]">
             <div className="font-mono text-[9px] text-ob-dim tracking-[0.14em] uppercase mb-[14px]">
-              Risk Score · Vardhman Agri Processing
+              Document Intelligence
             </div>
-            <div className="font-display text-[58px] text-ob-text leading-[1] tracking-[-0.03em]">
-              6.4<small className="text-[18px] text-ob-muted font-body font-light"> /10</small>
-            </div>
-            <div className="text-[11px] font-medium text-ob-muted mt-[8px] px-[10px] py-[5px] border border-ob-edge inline-block rounded-[4px] tracking-[0.04em]">
-              Conditional Approval Recommended
+            <div className="grid grid-cols-2 gap-[8px]">
+              {['ALM Statement', 'Shareholding', 'Borrowing Profile', 'Annual Reports', 'Portfolio Data', 'Bank Statement', 'GST Returns', 'ITR / PAN'].map((doc) => (
+                <div key={doc} className="flex items-center gap-2 p-[10px] bg-ob-glass2 border border-ob-edge rounded-[6px]">
+                  <span className="w-1.5 h-1.5 rounded-full bg-ob-ok flex-shrink-0" />
+                  <span className="font-mono text-[10px] text-ob-muted">{doc}</span>
+                </div>
+              ))}
             </div>
           </div>
 
-          {/* Metrics */}
+          {/* AI capabilities */}
           <div className="bg-ob-glass border border-ob-edge rounded-[12px] p-[20px] backdrop-blur-[28px]">
             <div className="font-mono text-[9px] text-ob-dim tracking-[0.14em] uppercase mb-[14px]">
-              Financial Snapshot
-            </div>
-            <div className="grid grid-cols-2 gap-[12px]">
-              <div className="p-[12px] bg-ob-glass2 border border-ob-edge rounded-[8px]">
-                <div className="font-mono text-[17px] font-medium text-ob-text">₹4.2Cr</div>
-                <div className="text-[10px] text-ob-muted mt-[3px] font-normal">Revenue TTM</div>
-              </div>
-              <div className="p-[12px] bg-ob-glass2 border border-ob-edge rounded-[8px]">
-                <div className="font-mono text-[17px] font-medium text-ob-text">14.3%</div>
-                <div className="text-[10px] text-ob-muted mt-[3px] font-normal">EBITDA Margin</div>
-              </div>
-              <div className="p-[12px] bg-ob-glass2 border border-ob-edge rounded-[8px]">
-                <div className="font-mono text-[17px] font-medium text-ob-text">1.82×</div>
-                <div className="text-[10px] text-ob-muted mt-[3px] font-normal">Debt / Equity</div>
-              </div>
-              <div className="p-[12px] bg-ob-glass2 border border-ob-edge rounded-[8px]">
-                <div className="font-mono text-[17px] font-medium text-[rgba(255,180,80,0.85)]">0.93×</div>
-                <div className="text-[10px] text-ob-muted mt-[3px] font-normal">DSCR ⚠</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Research */}
-          <div className="bg-ob-glass border border-ob-edge rounded-[12px] p-[20px] backdrop-blur-[28px]">
-            <div className="font-mono text-[9px] text-ob-dim tracking-[0.14em] uppercase mb-[14px]">
-              Research Agent Findings
+              AI Research Engine
             </div>
             <div className="flex flex-col gap-[7px]">
-              <div className="flex justify-between items-center py-[7px] border-b border-ob-edge">
-                <span className="text-[11px] text-ob-muted font-normal">MCA21 Status</span>
-                <span className="font-mono text-[11px] text-[rgba(255,180,80,0.8)]">1 charge registered</span>
-              </div>
-              <div className="flex justify-between items-center py-[7px] border-b border-ob-edge">
-                <span className="text-[11px] text-ob-muted font-normal">eCourts</span>
-                <span className="font-mono text-[11px] text-[rgba(180,240,180,0.7)]">No proceedings</span>
-              </div>
-              <div className="flex justify-between items-center py-[7px] border-b border-ob-edge">
-                <span className="text-[11px] text-ob-muted font-normal">News Sentiment</span>
-                <span className="font-mono text-[11px] text-[rgba(180,240,180,0.7)]">Neutral</span>
-              </div>
-              <div className="flex justify-between items-center pt-[7px]">
-                <span className="text-[11px] text-ob-muted font-normal">Rev. Concentration</span>
-                <span className="font-mono text-[11px] text-[rgba(255,180,80,0.8)]">68% top-2 clients</span>
-              </div>
+              {[
+                { label: 'Web Scraping', value: 'Crawl4AI + Live', ok: true },
+                { label: 'MCA21 Lookup', value: 'Auto', ok: true },
+                { label: 'eCourts Search', value: 'Auto', ok: true },
+                { label: 'News Sentiment', value: 'NLP Classified', ok: true },
+                { label: 'Fraud Graph', value: 'Multi-signal', ok: true },
+              ].map(({ label, value, ok }) => (
+                <div key={label} className="flex justify-between items-center py-[6px] border-b border-ob-edge last:border-0">
+                  <span className="text-[11px] text-ob-muted font-normal">{label}</span>
+                  <span className={`font-mono text-[11px] ${ok ? 'text-[rgba(180,240,180,0.8)]' : 'text-[rgba(255,180,80,0.8)]'}`}>{value}</span>
+                </div>
+              ))}
             </div>
           </div>
 
-          {/* CAM */}
+          {/* Output */}
           <div className="bg-ob-glass border border-ob-edge rounded-[12px] p-[20px] backdrop-blur-[28px]">
             <div className="font-mono text-[9px] text-ob-dim tracking-[0.14em] uppercase mb-[14px]">
-              Credit Appraisal Memo
+              Output & Analysis
             </div>
-            <div className="h-[3px] rounded-[2px] mb-[14px]" style={{ background: 'linear-gradient(90deg, rgba(255,255,255,0.2), rgba(255,255,255,0.05))' }} />
-
-            <div className="flex justify-between text-[10px] py-[3px]">
-              <span className="text-ob-muted font-normal">Borrower</span>
-              <span className="font-mono text-ob-dim">Vardhman Agri Processing</span>
+            <div className="flex flex-col gap-[7px]">
+              {[
+                { label: 'Credit Score', value: '300 – 900 scale' },
+                { label: 'Risk Grade', value: 'AAA → D' },
+                { label: 'SHAP Explainability', value: 'Per factor' },
+                { label: 'SWOT Analysis', value: 'AI-generated' },
+                { label: 'CAM Report', value: 'Word / PDF' },
+                { label: 'Chat with CAM', value: 'Gemini AI' },
+              ].map(({ label, value }) => (
+                <div key={label} className="flex justify-between items-center py-[6px] border-b border-ob-edge last:border-0">
+                  <span className="text-[11px] text-ob-muted font-normal">{label}</span>
+                  <span className="font-mono text-[11px] text-ob-dim">{value}</span>
+                </div>
+              ))}
             </div>
-            <div className="h-[1px] bg-ob-edge my-[6px]" />
-            <div className="flex justify-between text-[10px] py-[3px]">
-              <span className="text-ob-muted font-normal">Facility Type</span>
-              <span className="font-mono text-ob-dim">Working Capital — CC</span>
-            </div>
-            <div className="h-[1px] bg-ob-edge my-[6px]" />
-            <div className="flex justify-between text-[10px] py-[3px]">
-              <span className="text-ob-muted font-normal">Recommended Limit</span>
-              <span className="font-mono text-ob-dim">₹85 Lakh</span>
-            </div>
-            <div className="h-[1px] bg-ob-edge my-[6px]" />
-            <div className="flex justify-between text-[10px] py-[3px]">
-              <span className="text-ob-muted font-normal">Risk Premium</span>
-              <span className="font-mono text-ob-dim">+1.25% over base</span>
-            </div>
-
-            <div className="flex justify-between items-center mt-[12px] pt-[10px] border-t border-ob-edge">
-              <span className="font-mono text-[9px] text-ob-dim tracking-[0.08em]">GENERATED · 2m 34s</span>
-              <span className="text-[10px] font-semibold text-ob-text cursor-pointer tracking-[0.04em]">↓ Download Word</span>
+            <div className="mt-[14px] pt-[12px] border-t border-ob-edge">
+              <Link
+                href="/app/start"
+                className="block w-full text-center bg-ob-text text-ob-bg font-body text-[12px] font-bold px-4 py-[10px] rounded-[6px] tracking-[0.04em] no-underline hover:bg-ob-cream transition-all duration-200"
+              >
+                Start an Assessment →
+              </Link>
             </div>
           </div>
         </div>

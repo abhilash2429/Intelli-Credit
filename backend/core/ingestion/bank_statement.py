@@ -50,9 +50,9 @@ class BankStatementAnalyzer:
         monthly_balance = df.assign(month=df["date"].dt.to_period("M")).groupby("month")[
             "balance"
         ].mean()
-        average_monthly_balance = float(monthly_balance.mean()) if not monthly_balance.empty else 0.0
+        average_monthly_balance = float(monthly_balance.mean()) if not monthly_balance.empty else 0.0  # type: ignore[reportArgumentType, reportAttributeAccessIssue]
 
-        banking_turnover = float(credits.sum())
+        banking_turnover = float(credits.sum())  # type: ignore[reportArgumentType]
         abb_ratio = average_monthly_balance / max(annual_revenue, 1.0)
         banking_to_gst_ratio = banking_turnover / max(gst_turnover, 1.0)
 
@@ -65,7 +65,7 @@ class BankStatementAnalyzer:
         return BankStatementMetrics(
             average_monthly_balance=round(average_monthly_balance, 2),
             abb_to_claimed_revenue_ratio=round(abb_ratio, 4),
-            max_debit_single_transaction=round(float(debits.max()), 2),
+            max_debit_single_transaction=round(float(debits.max()), 2),  # type: ignore[reportArgumentType]
             circular_credit_debit_pairs=circular_pairs,
             emi_payments=emi,
             suspected_shell_company_transfers=shell_transfers,
@@ -91,7 +91,7 @@ class BankStatementAnalyzer:
             else:
                 df[col] = df[normalized_cols[col]]
 
-        return df[req].copy()
+        return df[req].copy()  # type: ignore[reportReturnType]
 
     @staticmethod
     def _detect_circular_pairs(df: pd.DataFrame) -> List[Transaction]:
@@ -101,7 +101,7 @@ class BankStatementAnalyzer:
 
         for _, debit_row in debits.iterrows():
             d_date = debit_row["date"]
-            d_amount = float(debit_row["debit"] or 0.0)
+            d_amount = float(debit_row["debit"] or 0.0)  # type: ignore[reportArgumentType]
             d_party = str(debit_row.get("party") or "").strip().lower()
             if d_amount <= 0:
                 continue
@@ -110,15 +110,15 @@ class BankStatementAnalyzer:
                 (credits["date"] >= d_date)
                 & (credits["date"] <= d_date + timedelta(days=3))
             ]
-            for _, credit_row in candidate.iterrows():
-                c_amount = float(credit_row["credit"] or 0.0)
+            for _, credit_row in candidate.iterrows():  # type: ignore[reportAttributeAccessIssue]
+                c_amount = float(credit_row["credit"] or 0.0)  # type: ignore[reportArgumentType]
                 lower = d_amount * 0.98
                 upper = d_amount * 1.02
                 c_party = str(credit_row.get("party") or "").strip().lower()
                 if lower <= c_amount <= upper and d_party and c_party == d_party:
                     txns.append(
                         Transaction(
-                            date=credit_row["date"].date(),
+                            date=credit_row["date"].date(),  # type: ignore[reportAttributeAccessIssue]
                             party=str(credit_row.get("party") or "Unknown"),
                             amount=round(c_amount, 2),
                             txn_type="CIRCULAR_PAIR",
@@ -135,9 +135,9 @@ class BankStatementAnalyzer:
         for _, row in df[mask & (df["debit"].fillna(0) > 0)].iterrows():
             emi.append(
                 EMIPayment(
-                    date=row["date"].date(),
+                    date=row["date"].date(),  # type: ignore[reportAttributeAccessIssue]
                     lender=str(row.get("party") or "") or None,
-                    amount=round(float(row["debit"]), 2),
+                    amount=round(float(row["debit"]), 2),  # type: ignore[reportArgumentType]
                     confidence_score=0.75,
                 )
             )
@@ -153,7 +153,7 @@ class BankStatementAnalyzer:
         ]
         for _, row in suspicious.iterrows():
             findings.append(
-                f"{row['date'].date()}: round transfer ₹{float(row['debit']):,.0f} to {row.get('party') or 'Unknown'}"
+                f"{row['date'].date()}: round transfer ₹{float(row['debit']):,.0f} to {row.get('party') or 'Unknown'}"  # type: ignore[reportArgumentType, reportAttributeAccessIssue]
             )
         return findings[:20]
 
@@ -179,8 +179,8 @@ class BankStatementAnalyzer:
         if march_data.empty:
             return False
 
-        first_half = march_data[march_data["date"].dt.day <= 15]["credit"].fillna(0).sum()
-        second_half = march_data[march_data["date"].dt.day > 15]["credit"].fillna(0).sum()
+        first_half = march_data[march_data["date"].dt.day <= 15]["credit"].fillna(0).sum()  # type: ignore[reportAttributeAccessIssue]
+        second_half = march_data[march_data["date"].dt.day > 15]["credit"].fillna(0).sum()  # type: ignore[reportAttributeAccessIssue]
         if first_half <= 0:
             return second_half > 0
         return second_half > 3 * first_half

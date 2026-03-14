@@ -185,7 +185,7 @@ class LoanApplication(Base):
     proposed_rate_pct = Column(Float, nullable=True)
     repayment_mode = Column(String(30), nullable=True)
     purpose = Column(Text, nullable=True)
-    collateral_type = Column(String(50), nullable=True)
+    collateral_type = Column(Text, nullable=True)
     collateral_value_cr = Column(Float, nullable=True)
     status = Column(String(20), default="PENDING", index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
