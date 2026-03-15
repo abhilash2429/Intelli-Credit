@@ -60,7 +60,7 @@ export default function ResearchFeed({ findings }: { findings: Finding[] }) {
       {hasMockData && (
         <div className="mb-3 px-3 py-2 rounded bg-ob-glass2 border border-ob-edge text-[11px] text-ob-muted font-medium">
           ℹ️ Live web research unavailable — results shown are from cached regulatory data.
-          To enable live search, add <span className="font-mono text-ob-text">FIRECRAWL_API_KEY</span> to your <span className="font-mono text-ob-text">.env</span> file.
+          To enable live search, add <span className="font-mono text-ob-text">TAVILY_API_KEY</span> and/or <span className="font-mono text-ob-text">FIRECRAWL_API_KEY</span> to your <span className="font-mono text-ob-text">.env</span> file.
         </div>
       )}
 

@@ -141,19 +141,46 @@ class CreditExplainer:
         dscr = features.get("dscr", 0.0)
         gst_gap = features.get("gstr3b_vs_2a_itc_gap", 0.0)
         capacity = features.get("factory_capacity_utilization", 60.0)
+        de_ratio = features.get("debt_equity_ratio", 0.0)
+        icr = features.get("interest_coverage_ratio", 0.0)
 
         dscr_text = format_ratio(dscr)
         gst_text = format_percentage(gst_gap)
         capacity_text = format_percentage(capacity)
+        de_text = format_ratio(de_ratio)
+        icr_text = format_ratio(icr)
+
+        if dscr >= 1.3:
+            dscr_view = "comfortable"
+        elif dscr >= 1.1:
+            dscr_view = "watchlist"
+        else:
+            dscr_view = "stressed"
+
+        if gst_gap <= 5:
+            gst_view = "clean"
+        elif gst_gap <= 20:
+            gst_view = "moderate mismatch"
+        else:
+            gst_view = "severe mismatch"
+
+        if de_ratio <= 1.0:
+            leverage_view = "conservative"
+        elif de_ratio <= 2.0:
+            leverage_view = "moderate"
+        else:
+            leverage_view = "elevated"
 
         return (
-            "The recommendation balances cashflow resilience against detected governance and compliance risks. "
-            f"DSCR is observed at {dscr_text}, GST ITC gap at {gst_text}, and factory utilization at {capacity_text}. "
-            "Positive drivers include: "
-            + ("; ".join(positives) if positives else "limited strong positives.")
-            + " Key constraints include: "
-            + ("; ".join(negatives) if negatives else "no major negatives identified.")
-            + " Final recommendation therefore applies risk-adjusted exposure and pricing."
+            "Decision rationale is based on document-derived repayment capacity and balance-sheet resilience. "
+            f"Debt service coverage is {dscr_text} ({dscr_view}), interest coverage is {icr_text}, "
+            f"leverage is {de_text} ({leverage_view}), GST ITC gap is {gst_text} ({gst_view}), "
+            f"and capacity utilization is {capacity_text}. "
+            "Primary strengths considered: "
+            + ("; ".join(positives) if positives else "none materially above threshold.")
+            + " Primary constraints considered: "
+            + ("; ".join(negatives) if negatives else "no material adverse trigger.")
+            + " Recommendation and pricing are therefore calibrated to these quantified signals."
         )
 
     @staticmethod

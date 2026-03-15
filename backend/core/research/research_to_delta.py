@@ -5,7 +5,6 @@ Generates CAM research narrative from structured findings.
 from __future__ import annotations
 
 from backend.core.llm.llm_client import llm_call
-from backend.config import settings
 from backend.core.structured_logging import get_logger
 
 logger = get_logger(__name__)
@@ -25,24 +24,19 @@ Requirements:
 - Mention critical negatives first.
 - Mention sector context and positives, if any.
 - Explain risk implication for sanction decision.
+- Use concrete evidence: include at least 4 named sources and 4 specific facts.
+- Avoid vague phrases like "some concerns" or "various reports indicate".
 - 300-450 words.
 """
 
 
 class ResearchToDelta:
     """
-    LLM-based narrative synthesis with deterministic fallback.
+    Cerebras-LLM narrative synthesis with deterministic fallback.
     """
 
     def __init__(self) -> None:
         self._client = None
-        if settings.anthropic_api_key:
-            try:
-                import anthropic
-
-                self._client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
-            except Exception:
-                logger.warning("research_to_delta.anthropic_unavailable")
 
     def generate_cam_section(self, research_summary: dict) -> str:
         findings = research_summary.get("all_findings", [])[:20]
@@ -59,19 +53,6 @@ class ResearchToDelta:
             score_impact=research_summary.get("total_score_impact", 0),
             findings=findings_text or "No material findings identified.",
         )
-
-        if self._client is not None:
-            try:
-                response = self._client.messages.create(
-                    model="claude-sonnet-4-20250514",
-                    max_tokens=1500,
-                    messages=[{"role": "user", "content": prompt}],
-                )
-                text = response.content[0].text.strip()  # type: ignore[reportAttributeAccessIssue]
-                if text:
-                    return text
-            except Exception as exc:
-                logger.warning("research_to_delta.llm_failed", error=str(exc))
 
         try:
             response = llm_call(
@@ -93,24 +74,34 @@ class ResearchToDelta:
         positives = [f for f in findings if float(f.get("score_impact", 0)) > 0]
         verdict = research_summary.get("research_verdict", "LOW_RISK")
         company_name = research_summary.get("company_name", "the borrower")
+        top_critical = critical[:4]
+        top_positive = positives[:2]
 
         intro = (
             f"Secondary research for {company_name} indicates a {verdict} profile based on "
             f"{len(findings)} sourced findings across litigation, regulatory, promoter, and sector intelligence."
         )
-        neg = (
-            "Critical and high-severity signals were identified, requiring enhanced monitoring and tighter covenants."
-            if critical
-            else "No critical enforcement or insolvency signal was identified in the reviewed source set."
-        )
-        pos = (
-            f"Positive external intelligence was also observed in {len(positives)} source items, "
-            "indicating partially offsetting comfort factors."
-            if positives
-            else "No strong positive external signal was observed to offset identified concerns."
-        )
+        if top_critical:
+            critical_lines = []
+            for item in top_critical:
+                critical_lines.append(
+                    f"[{item.get('severity')}] {item.get('source_name', 'Web')}: {item.get('summary', 'N/A')}"
+                )
+            neg = "Key adverse findings: " + " | ".join(critical_lines) + "."
+        else:
+            neg = "No critical enforcement, insolvency, or fraud signal was identified in the reviewed source set."
+
+        if top_positive:
+            positive_lines = []
+            for item in top_positive:
+                positive_lines.append(
+                    f"{item.get('source_name', 'Web')}: {item.get('summary', 'N/A')}"
+                )
+            pos = "Offsetting comfort signals: " + " | ".join(positive_lines) + "."
+        else:
+            pos = "No strong external positive catalyst was identified to offset adverse intelligence."
         close = (
-            "Overall, research output should be treated as a risk-adjusting input to sanction terms, "
-            "including pricing premium, covenant package, and post-disbursement review cadence."
+            "Research should be treated as an advisory overlay to credit governance: "
+            "flagged items require analyst verification, covenant calibration, and tighter post-disbursement monitoring."
         )
         return " ".join([intro, neg, pos, close])

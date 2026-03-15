@@ -50,17 +50,16 @@ This repository now contains:
 
 Keep the following in `.env`:
 
-- `HUGGINGFACE_API_TOKEN`: Required for free LLM + Qwen2.5-VL OCR over Hugging Face router.
-- `FIRECRAWL_API_KEY`: Required for live web scraping/research.
+- `CEREBRAS_API_KEY`: Required for all text LLM tasks.
+- `CEREBRAS_MODEL`: Cerebras model name (default: `qwen-3-235b-a22b-instruct-2507`).
 - `DATABRICKS_HOST`: Databricks workspace URL.
 - `DATABRICKS_TOKEN`: Databricks PAT.
 - `DATABRICKS_CLUSTER_ID`: Target Databricks cluster.
+- `TAVILY_API_KEY` and/or `FIRECRAWL_API_KEY`: Required for live web search mode.
 
 Optional fallbacks:
 
-- `CEREBRAS_API_KEY`
-- `GITHUB_TOKEN`
-- `ANTHROPIC_API_KEY`
+- `HUGGINGFACE_API_TOKEN` (for Qwen2.5-VL OCR path only)
 
 ## Pipeline Structure
 
@@ -206,6 +205,6 @@ pytest -q tests/backend
 
 - Research layer supports:
   - `RESEARCH_MODE=mock` (default deterministic mode)
-  - `RESEARCH_MODE=live` (Firecrawl + Hugging Face free LLM extraction; Anthropic optional)
+  - `RESEARCH_MODE=live` (Tavily/Firecrawl search + Firecrawl/Crawl4AI extraction, capped to 20 live web outputs/run)
 - Delta persistence is enabled automatically when Spark + Delta dependencies are available; set `SPARK_LOCAL_MODE=false` to use Databricks Connect.
 - Existing frontend remains Next.js (already integrated and running). The advanced Vite-style dashboard requirements are implemented functionally in current app pages/components.

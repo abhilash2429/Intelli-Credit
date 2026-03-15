@@ -33,9 +33,11 @@ async def create_company(
         id=uuid.uuid4(),
         name=payload.name,
         cin=payload.cin,
+        gstin=payload.gstin,
         sector=payload.sector,
         pan_number=payload.pan_number,
         annual_turnover_cr=payload.annual_turnover_cr,
+        employee_count=payload.employee_count,
         year_of_incorporation=payload.year_of_incorporation,
         registered_address=payload.registered_address,
     )

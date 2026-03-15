@@ -206,8 +206,8 @@ export interface IntegrationHealthResponse {
   live_checks: boolean;
   overall_ok: boolean;
   integrations: {
-    gemini: IntegrationStatus;
-    firecrawl: IntegrationStatus;
+    llm_cerebras: IntegrationStatus;
+    tavily: IntegrationStatus;
     qwen_vl: IntegrationStatus;
     databricks: IntegrationStatus;
   };
@@ -218,10 +218,16 @@ export interface IntegrationHealthResponse {
 export interface CompanyCreateInput {
   name: string;
   cin?: string;
+  gstin?: string;
   sector: string;
   loan_amount_requested: number;
   loan_tenor_months: number;
   loan_purpose?: string;
+  pan_number?: string;
+  annual_turnover_cr?: number;
+  employee_count?: number;
+  year_of_incorporation?: number;
+  registered_address?: string;
 }
 
 export interface DueDiligenceV1Input {

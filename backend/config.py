@@ -22,6 +22,7 @@ class Settings(BaseSettings):
 
     # LLM API Keys
     cerebras_api_key: str = ""   # from CEREBRAS_API_KEY env var
+    cerebras_model: str = "qwen-3-235b-a22b-instruct-2507"
     github_token: str = ""       # from GITHUB_TOKEN env var — PAT with models:read scope
     openai_api_key: str = ""
     anthropic_api_key: str = ""
@@ -31,7 +32,7 @@ class Settings(BaseSettings):
     huggingface_api_token: str = ""
     huggingface_base_url: str = "https://router.huggingface.co/v1"
     hf_free_llm_model: str = "Qwen/Qwen2.5-7B-Instruct"
-    llm_provider: str = "cerebras"   # cerebras | huggingface | mock | openai | anthropic
+    llm_provider: str = "cerebras"   # Cerebras-only policy for text LLM tasks
     grok_api_key: str = ""
     sarvam_api_key: str = ""
     qwen_vl_api_key: str = ""
@@ -42,10 +43,22 @@ class Settings(BaseSettings):
 
     # Web Research
     serper_api_key: str = ""
+    firecrawl_api_key: str = ""
+    max_firecrawl_pages_per_search: int = 5
     tavily_api_key: str = ""
     max_tavily_results_per_search: int = 10
-    max_research_sources_per_company: int = 50
+    max_research_sources_per_company: int = 20
     research_depth: str = "deep"  # shallow | medium | deep
+    max_live_queries: int = 12
+    max_live_urls_to_scrape: int = 8
+    live_query_concurrency: int = 5
+    research_strict_source_filter: bool = True
+    research_news_domains: str = (
+        "economictimes.indiatimes.com,thehindu.com,business-standard.com,livemint.com,moneycontrol.com,reuters.com"
+    )
+    research_legal_domains: str = "ecourts.gov.in"
+    research_mca_domains: str = "mca.gov.in"
+    research_regulatory_domains: str = "rbi.org.in,sebi.gov.in,fssai.gov.in"
 
     # Databricks / Delta Lake
     databricks_host: str = ""
@@ -95,6 +108,26 @@ class Settings(BaseSettings):
     @property
     def allowed_extensions(self) -> List[str]:
         return [v.strip().lower() for v in self.allowed_upload_extensions.split(",") if v.strip()]
+
+    @staticmethod
+    def _parse_csv_domains(value: str) -> List[str]:
+        return [v.strip().lower() for v in value.split(",") if v.strip()]
+
+    @property
+    def news_domains(self) -> List[str]:
+        return self._parse_csv_domains(self.research_news_domains)
+
+    @property
+    def legal_domains(self) -> List[str]:
+        return self._parse_csv_domains(self.research_legal_domains)
+
+    @property
+    def mca_domains(self) -> List[str]:
+        return self._parse_csv_domains(self.research_mca_domains)
+
+    @property
+    def regulatory_domains(self) -> List[str]:
+        return self._parse_csv_domains(self.research_regulatory_domains)
 
 
 settings = Settings()

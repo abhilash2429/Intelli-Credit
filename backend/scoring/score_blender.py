@@ -14,9 +14,12 @@ Decision thresholds (Indian banking context):
 Loan limit: MPBF (Maximum Permissible Bank Finance) per RBI Tandon Committee norms.
 """
 
+import logging
 from typing import Dict, Optional, Tuple
 
 from backend.schemas.credit import RiskCategory
+
+logger = logging.getLogger(__name__)
 
 RULE_WEIGHT = 0.6
 ML_WEIGHT = 0.4
@@ -76,6 +79,15 @@ def compute_loan_limit(financials: dict, risk_score: float) -> float:
         Recommended loan limit in ₹ Crore. Returns 0 if REJECT.
     """
     if risk_score < 35:
+        logger.info(
+            "LIMIT DEBUG: %s",
+            {
+                "form_turnover": None,
+                "extracted_revenue": financials.get("annual_revenue_cr"),
+                "requested_amount": None,
+                "using_value": "mpbf_reject_zero_limit",
+            },
+        )
         return 0.0
 
     current_assets = financials.get("current_assets_crore") or 0
@@ -84,6 +96,16 @@ def compute_loan_limit(financials: dict, risk_score: float) -> float:
 
     risk_multiplier = risk_score / 100
     limit = mpbf * risk_multiplier
+
+    logger.info(
+        "LIMIT DEBUG: %s",
+        {
+            "form_turnover": None,
+            "extracted_revenue": financials.get("annual_revenue_cr"),
+            "requested_amount": None,
+            "using_value": "mpbf_formula",
+        },
+    )
 
     return round(limit, 1)
 

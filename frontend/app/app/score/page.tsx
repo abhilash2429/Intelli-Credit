@@ -23,6 +23,25 @@ function getNeedlePoint(score: number) {
   };
 }
 
+function getGaugeColor(score: number) {
+  if (score >= 80) return '#22c55e'; // green — low risk
+  if (score >= 65) return '#84cc16'; // lime — moderate-low
+  if (score >= 50) return '#eab308'; // yellow — moderate
+  if (score >= 35) return '#f97316'; // orange — moderate-high
+  return '#ef4444'; // red — high risk
+}
+
+function hexToRgba(hex: string, alpha: number) {
+  const cleaned = hex.replace('#', '');
+  const value = cleaned.length === 3
+    ? cleaned.split('').map((c) => c + c).join('')
+    : cleaned;
+  const r = parseInt(value.slice(0, 2), 16);
+  const g = parseInt(value.slice(2, 4), 16);
+  const b = parseInt(value.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 export default function ScorePage() {
   const { result, companyId, companyName, setResult } = useAnalysisStore();
   const [loading, setLoading] = useState(false);
@@ -42,6 +61,30 @@ export default function ScorePage() {
         .finally(() => setLoading(false));
     }
   }, [companyId, result, setResult]);
+
+  useEffect(() => {
+    if (!result) return;
+    const limitDebug = result?.limit_debug || {};
+    const company = result?.company || {};
+    const extractedData = result?.financials || result?.parsed_financials?.financials || {};
+    const loanData = result?.loan || {};
+    const extractedRevenue =
+      limitDebug.extracted_revenue ??
+      extractedData.annual_revenue_cr ??
+      extractedData.revenue_cr ??
+      extractedData.gross_receipts_cr;
+
+    console.log('LIMIT DEBUG:', {
+      form_turnover:
+        limitDebug.form_turnover ?? company.turnover ?? company.annual_turnover_cr,
+      extracted_revenue: extractedRevenue,
+      requested_amount:
+        limitDebug.requested_amount ?? loanData.loan_amount_cr ?? result?.decision?.recommended_loan_amount,
+      using_value:
+        limitDebug.using_value ??
+        (extractedRevenue ? 'extracted_data.annual_revenue_cr' : 'company.turnover'),
+    });
+  }, [result]);
 
   const score = useMemo(() => {
     if (!result) return null;
@@ -127,7 +170,14 @@ export default function ScorePage() {
 
   const needle = getNeedlePoint(animatedScore);
   const progress = (Math.max(0, Math.min(100, animatedScore)) / 100) * ARC_LEN;
-  const statusLabel = `${score.riskCategory} - Low Risk`;
+  const gaugeColor = getGaugeColor(score.finalRiskScore);
+  const recommendation = String(result?.decision?.recommendation || 'PENDING').replace('_', ' ');
+  const riskBandLabel = `${score.riskCategory}`;
+  const badgeStyle = {
+    borderColor: hexToRgba(gaugeColor, 0.45),
+    backgroundColor: hexToRgba(gaugeColor, 0.12),
+    color: gaugeColor,
+  };
   const metrics = [
     {
       title: 'DSCR',
@@ -201,9 +251,18 @@ export default function ScorePage() {
               <p className="text-xs uppercase tracking-[0.2em] text-[#9CA3AF]">Loan Requested</p>
               <p className="mt-1 text-lg font-semibold text-white">{formatCurrencyCr(score.requestedLoanCr)}</p>
             </div>
-            <div className="flex md:justify-end">
-              <span className="inline-flex rounded-full border border-[#2ECC71]/40 bg-[#2ECC71]/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-[#2ECC71]">
-                {statusLabel}
+            <div className="flex flex-wrap gap-2 md:justify-end">
+              <span
+                className="inline-flex rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.14em]"
+                style={badgeStyle}
+              >
+                {riskBandLabel}
+              </span>
+              <span
+                className="inline-flex rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.14em]"
+                style={badgeStyle}
+              >
+                {recommendation}
               </span>
             </div>
           </div>
@@ -214,21 +273,14 @@ export default function ScorePage() {
             <div className="relative">
               {scoreSettled && (
                 <motion.div
-                  className="pointer-events-none absolute inset-7 rounded-full border border-[#2ECC71]/30"
+                  className="pointer-events-none absolute inset-7 rounded-full border"
+                  style={{ borderColor: hexToRgba(gaugeColor, 0.35) }}
                   initial={{ opacity: 0.1, scale: 0.95 }}
                   animate={{ opacity: [0.1, 0.35, 0.1], scale: [0.95, 1.05, 0.95] }}
                   transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
                 />
               )}
               <svg width="400" height="250" viewBox="0 0 400 250">
-                <defs>
-                  <linearGradient id="riskGradient" x1="40" y1="220" x2="360" y2="220">
-                    <stop offset="0%" stopColor="#ef4444" />
-                    <stop offset="50%" stopColor="#facc15" />
-                    <stop offset="100%" stopColor="#2ECC71" />
-                  </linearGradient>
-                </defs>
-
                 <path
                   d="M 40 220 A 160 160 0 0 1 360 220"
                   stroke="rgba(255,255,255,0.12)"
@@ -238,7 +290,7 @@ export default function ScorePage() {
                 />
                 <motion.path
                   d="M 40 220 A 160 160 0 0 1 360 220"
-                  stroke="url(#riskGradient)"
+                  stroke={gaugeColor}
                   strokeWidth="24"
                   strokeLinecap="round"
                   fill="none"
@@ -250,18 +302,23 @@ export default function ScorePage() {
                   y1={GAUGE_CY}
                   x2={needle.x}
                   y2={needle.y}
-                  stroke="#ffffff"
+                  stroke={gaugeColor}
                   strokeWidth="3"
                   strokeLinecap="round"
                 />
-                <circle cx={GAUGE_CX} cy={GAUGE_CY} r="8" fill="#ffffff" />
+                <circle cx={GAUGE_CX} cy={GAUGE_CY} r="8" fill={gaugeColor} />
               </svg>
             </div>
           </motion.div>
 
           <motion.p
-            className="mt-[-14px] text-6xl font-semibold tracking-tight text-white"
-            animate={{ textShadow: scoreSettled ? '0 0 26px rgba(46,204,113,0.28)' : '0 0 0px rgba(46,204,113,0)' }}
+            className="mt-[-14px] text-6xl font-semibold tracking-tight"
+            style={{ color: gaugeColor }}
+            animate={{
+              textShadow: scoreSettled
+                ? `0 0 26px ${hexToRgba(gaugeColor, 0.32)}`
+                : `0 0 0px ${hexToRgba(gaugeColor, 0)}`
+            }}
           >
             {Math.round(animatedScore)}
           </motion.p>

@@ -49,10 +49,16 @@ export default function StartPage() {
       const companyRes = await createCompanyV1({
         name: entity.name.trim(),
         cin: entity.cin || undefined,
+        gstin: entity.gstin || undefined,
         sector: entity.sector,
         loan_amount_requested: Number(loan.loan_amount_cr) || 0,
         loan_tenor_months: Number(loan.tenure_months) || 0,
         loan_purpose: loan.purpose || undefined,
+        pan_number: entity.pan || undefined,
+        annual_turnover_cr: Number(entity.annual_turnover_cr) || undefined,
+        employee_count: Number(entity.employee_count) || undefined,
+        year_of_incorporation: Number(entity.year_of_incorporation) || undefined,
+        registered_address: entity.registered_address || undefined,
       });
       const companyId = companyRes.data?.company_id;
       if (!companyId) throw new Error('No company ID returned');

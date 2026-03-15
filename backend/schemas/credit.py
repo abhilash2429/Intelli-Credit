@@ -96,6 +96,10 @@ class ExtractedFinancialData(BaseModel):
     company_name: str = "Unknown"
     cin_number: Optional[str] = None
     pan_number: Optional[str] = None
+    crisil_rating: Optional[str] = None
+    crisil_rating_action: Optional[str] = None
+    customer_concentration_top5_pct: Optional[float] = None
+    strategic_partnership_mentioned: Optional[str] = None
     revenue_figures: List[MoneyAmount] = Field(default_factory=list)
     profit_figures: List[MoneyAmount] = Field(default_factory=list)
     total_debt: Optional[MoneyAmount] = None
@@ -261,6 +265,7 @@ class CreditDecision(BaseModel):
     confidence_interval: List[float]
     human_input_impact_points: float = 0.0
     rule_hits: List[str] = Field(default_factory=list)
+    scoring_warnings: List[str] = Field(default_factory=list)
 
 
 class Explanation(BaseModel):
@@ -291,12 +296,14 @@ class AuditEvent(BaseModel):
 class CompanyCreateInput(BaseModel):
     name: str
     cin: Optional[str] = None
+    gstin: Optional[str] = None
     sector: str = "agri_processing"
     loan_amount_requested: float = 0.0
     loan_tenor_months: int = 36
     loan_purpose: str = "working_capital"
     pan_number: Optional[str] = None
     annual_turnover_cr: Optional[float] = None
+    employee_count: Optional[int] = None
     year_of_incorporation: Optional[int] = None
     registered_address: Optional[str] = None
 

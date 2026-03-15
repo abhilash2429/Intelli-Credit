@@ -1,5 +1,5 @@
 """
-Search strategies for Firecrawl-powered corporate research.
+Search strategies for Tavily/Crawl4AI-powered corporate research.
 """
 
 from __future__ import annotations
@@ -65,12 +65,12 @@ def litigation_queries(
 ) -> list[dict]:
     queries: list[dict] = [
         {
-            "query": f'"{company_name}" NCLT OR CIRP OR insolvency OR liquidation',
+            "query": f'site:ecourts.gov.in "{company_name}" NCLT OR CIRP OR insolvency OR liquidation',
             "type": "LITIGATION",
             "priority": 1,
         },
         {
-            "query": f'"{company_name}" DRT OR debt recovery tribunal OR SARFAESI',
+            "query": f'site:ecourts.gov.in "{company_name}" DRT OR debt recovery tribunal OR SARFAESI',
             "type": "LITIGATION",
             "priority": 1,
         },
@@ -80,7 +80,7 @@ def litigation_queries(
             "priority": 1,
         },
         {
-            "query": f'"{company_name}" court case OR legal notice OR arbitration',
+            "query": f'site:ecourts.gov.in "{company_name}" court case OR legal notice OR arbitration',
             "type": "LITIGATION",
             "priority": 2,
         },
@@ -89,7 +89,7 @@ def litigation_queries(
     for promoter in promoter_names:
         queries.append(
             {
-                "query": f'"{promoter}" court case OR FIR OR conviction',
+                "query": f'site:ecourts.gov.in "{promoter}" court case OR FIR OR conviction',
                 "type": "LITIGATION",
                 "priority": 2,
             }
@@ -98,7 +98,7 @@ def litigation_queries(
     if cin:
         queries.append(
             {
-                "query": f'"{cin}" NCLT OR MCA struck off OR winding up',
+                "query": f'site:ecourts.gov.in "{cin}" NCLT OR winding up',
                 "type": "LITIGATION",
                 "priority": 2,
             }
@@ -168,7 +168,7 @@ def mca_queries(
             "priority": 1,
         },
         {
-            "query": f'"{company_name}" struck off OR dormant OR ROC notice',
+            "query": f'site:mca.gov.in "{company_name}" struck off OR dormant OR ROC notice',
             "type": "MCA_FILING",
             "priority": 1,
         },
@@ -177,7 +177,7 @@ def mca_queries(
     if cin:
         queries.append(
             {
-                "query": f'"{cin}" MCA master data OR charges',
+                "query": f'site:mca.gov.in "{cin}" MCA master data OR charges',
                 "type": "MCA_FILING",
                 "priority": 1,
             }
@@ -185,7 +185,7 @@ def mca_queries(
     for director in director_names or []:
         queries.append(
             {
-                "query": f'"{director}" DIN MCA disqualified director',
+                "query": f'site:mca.gov.in "{director}" DIN MCA disqualified director',
                 "type": "MCA_FILING",
                 "priority": 2,
             }
@@ -228,4 +228,3 @@ def get_all_queries(
     )
     filtered = [q for q in queries if q["priority"] <= max_priority]
     return sorted(filtered, key=lambda x: x["priority"])
-

@@ -19,7 +19,7 @@ export default function AnomalyFlags({ anomalies }: { anomalies: Anomaly[] }) {
     return (
       <div className="bg-ob-glass border border-ob-edge rounded-[12px] p-[20px] backdrop-blur-[28px]">
         <p className="font-mono text-[9px] font-normal tracking-[0.14em] uppercase text-ob-dim mb-2.5">Anomaly Flags</p>
-        <p className="text-ob-muted text-[13px]">No critical anomalies detected.</p>
+        <p className="text-ob-muted text-[13px]">No anomaly or fraud flags detected.</p>
       </div>
     );
   }

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAnalysisStore } from '@/store/analysisStore';
-import { previewDueDiligenceV1, submitDueDiligenceV1 } from '@/lib/api';
+import { previewDueDiligenceV1, submitDueDiligenceV1, triggerAnalysisV1 } from '@/lib/api';
 
 function useDebounce<T>(value: T, delay = 600): T {
   const [debounced, setDebounced] = useState(value);
@@ -62,6 +62,7 @@ export default function DueDiligencePage() {
         management_interview_rating: interviewRating,
         key_management_persons: [],
       });
+      await triggerAnalysisV1(companyId);
       advanceStep(); // step 1 → 2
       router.push('/app/pipeline');
     } catch (err: any) {

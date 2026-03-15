@@ -4,13 +4,11 @@ LLM-backed extractor that turns page content into structured findings.
 
 from __future__ import annotations
 
-import json
 import re
 from datetime import datetime, date
 from typing import Any
 
 from backend.core.llm.llm_client import llm_call_json
-from backend.config import settings
 from backend.core.structured_logging import get_logger
 
 logger = get_logger(__name__)
@@ -45,20 +43,11 @@ Return only valid JSON:
 
 class FindingExtractor:
     """
-    Uses Anthropic if available, otherwise unified free LLM, then heuristics.
+    Uses unified Cerebras LLM extraction, then heuristics fallback.
     """
 
     def __init__(self) -> None:
         self._client = None
-        self._enabled = bool(settings.anthropic_api_key)
-        if self._enabled:
-            try:
-                import anthropic
-
-                self._client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
-            except Exception:
-                logger.warning("finding_extractor.anthropic_unavailable")
-                self._enabled = False
 
     def extract(
         self,
@@ -72,59 +61,10 @@ class FindingExtractor:
         if len(content) < 120:
             return []
 
-        if self._enabled and self._client is not None:
-            findings = self._extract_llm(content, url, search_query, company_name)
-            if findings:
-                return findings
         findings = self._extract_unified_llm(content, url, search_query, company_name)
         if findings:
             return findings
         return self._extract_heuristic(content, url, search_query, company_name)
-
-    def _extract_llm(
-        self,
-        content: str,
-        url: str,
-        search_query: str,
-        company_name: str,
-    ) -> list[dict[str, Any]]:
-        prompt = EXTRACTION_PROMPT.format(
-            company_name=company_name,
-            search_query=search_query,
-            url=url,
-            content=content[:8000],
-        )
-        try:
-            response = self._client.messages.create(  # type: ignore[union-attr]
-                model="claude-sonnet-4-20250514",
-                max_tokens=2000,
-                messages=[{"role": "user", "content": prompt}],
-            )
-            raw = response.content[0].text.strip()  # type: ignore[reportAttributeAccessIssue]
-            cleaned = self._strip_fences(raw)
-            parsed = json.loads(cleaned)
-            out = []
-            for item in parsed.get("findings", []):
-                if not item.get("is_relevant", True):
-                    continue
-                out.append(
-                    {
-                        "headline": str(item.get("headline", ""))[:180],
-                        "summary": str(item.get("summary", ""))[:1200],
-                        "finding_type": self._normalize_finding_type(item.get("finding_type")),
-                        "severity": self._normalize_severity(item.get("severity")),
-                        "source_date": self._parse_date(item.get("source_date")),
-                        "score_impact": float(item.get("score_impact", 0.0)),
-                        "cam_section": str(item.get("cam_section", "research_summary")),
-                        "source_url": url,
-                        "source_name": self._source_name(url),
-                        "raw_snippet": content[:1200],
-                    }
-                )
-            return out
-        except Exception as exc:
-            logger.warning("finding_extractor.llm_failed", error=str(exc), url=url[:120])
-            return []
 
     def _extract_unified_llm(
         self,

@@ -7,6 +7,7 @@ Two-stage credit scoring engine:
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 from pathlib import Path
 from typing import Dict, List, Tuple
 
@@ -21,6 +22,8 @@ from backend.core.ml.feature_engineering import CREDIT_FEATURES
 from backend.core.ml.risk_rules import evaluate_hard_rules
 from backend.schemas.credit import CreditDecision
 
+logger = logging.getLogger(__name__)
+
 
 def compute_interest_premium_bps(grade: str) -> int:
     """
@@ -30,7 +33,7 @@ def compute_interest_premium_bps(grade: str) -> int:
     premium_map = {
         "AAA": 50,
         "AA+": 60,
-        "AA": 75,
+        "AA": 100,
         "AA-": 100,
         "A+": 125,
         "A": 150,
@@ -69,6 +72,15 @@ def compute_recommended_limit(
     Compute approved limit in Cr based on request, annual revenue cap, and risk grade.
     """
     max_allowable = max(extracted_revenue_cr, 0.0) * 0.25
+    logger.info(
+        "LIMIT DEBUG: %s",
+        {
+            "form_turnover": None,
+            "extracted_revenue": float(extracted_revenue_cr or 0.0),
+            "requested_amount": float(requested_amount_cr or 0.0),
+            "using_value": "compute_recommended_limit",
+        },
+    )
     grade_multiplier = {
         "AAA": 1.0,
         "AA+": 1.0,
@@ -148,11 +160,56 @@ class CreditScoringModel:
         *,
         requested_loan_amount: float,
         annual_revenue_cr: float = 0.0,
-        form_turnover_cr: float = 100.0,
+        revenue_cr: float = 0.0,
+        gross_receipts_cr: float = 0.0,
+        form_turnover_cr: float = 0.0,
+        revenue_source: str = "extracted_data.annual_revenue_cr",
         sector: str,
         loan_type: str = "secured",
     ) -> CreditDecision:
-        rule_hits = evaluate_hard_rules(features)
+        score_features = self._doc_only_score_features(features)
+        rule_hits = evaluate_hard_rules(score_features)
+        scoring_warnings: List[str] = []
+        revenue_candidates = [
+            ("extracted_data.revenue_cr", float(revenue_cr or 0.0)),
+            ("extracted_data.annual_revenue_cr", float(annual_revenue_cr or 0.0)),
+            ("extracted_data.gross_receipts_cr", float(gross_receipts_cr or 0.0)),
+        ]
+        extracted_revenue = 0.0
+        using_value = "company.turnover"
+        for source_name, candidate in revenue_candidates:
+            if candidate > 0:
+                extracted_revenue = candidate
+                using_value = source_name
+                break
+        logger.info(
+            "SCORING INPUT DEBUG: %s",
+            {
+                "form_turnover_cr": float(form_turnover_cr or 0.0),
+                "extracted_revenue_cr": float(extracted_revenue) if extracted_revenue > 0 else None,
+                "which_is_used": using_value if extracted_revenue > 0 else "company.turnover",
+            },
+        )
+        score_cap = 100.0
+        if extracted_revenue <= 0:
+            warning = (
+                "WARNING: Using form turnover as revenue fallback. "
+                "Document extraction may have failed. Score may be inaccurate."
+            )
+            logger.warning(warning)
+            scoring_warnings.append(warning)
+            extracted_revenue = float(form_turnover_cr or 0.0)
+            score_cap = 70.0
+            using_value = "company.turnover"
+        logger.info(
+            "LIMIT DEBUG: %s",
+            {
+                "form_turnover": float(form_turnover_cr or 0.0),
+                "extracted_revenue": float(extracted_revenue or 0.0),
+                "requested_amount": float(requested_loan_amount or 0.0),
+                "using_value": using_value,
+            },
+        )
         if rule_hits:
             # On hard REJECT: compute limit and rate for informational display,
             # but mark as REJECT with clear "Not Sanctioned" semantics.
@@ -168,7 +225,7 @@ class CreditScoringModel:
                 recommendation="REJECT",
                 recommended_loan_amount=compute_recommended_limit(
                     requested_loan_amount,
-                    (annual_revenue_cr or form_turnover_cr),
+                    extracted_revenue,
                     risk_grade,
                 ),
                 recommended_interest_rate=pricing,  # Informational rate, always positive
@@ -176,18 +233,27 @@ class CreditScoringModel:
                 confidence_interval=[420.0, 480.0],
                 human_input_impact_points=0.0,
                 rule_hits=rule_hits,
+                scoring_warnings=scoring_warnings,
             )
 
         artifacts = self._load_or_train()
-        X = pd.DataFrame([features], columns=self.feature_order)
+        X = pd.DataFrame([score_features], columns=self.feature_order)
         stress_prob = float(artifacts.classifier.predict_proba(X)[0][1])
         model_score = float(artifacts.regressor.predict(X)[0])
-        human_input_impact = float(features.get("due_diligence_risk_adjustment", 0.0)) * 3.0
+        human_input_impact = float(score_features.get("due_diligence_risk_adjustment", 0.0)) * 3.0
 
         # Blend model score with stress probability to reduce overconfidence.
         adjusted_score = model_score - (stress_prob * 220.0) + human_input_impact
         credit_score = float(np.clip(adjusted_score, 0, 900))
         normalized_score = round((credit_score / 900.0) * 100.0, 1)
+        if normalized_score > score_cap:
+            logger.warning(
+                "scoring.score_capped_due_to_revenue_fallback: cap=%s original_normalized_score=%s",
+                score_cap,
+                normalized_score,
+            )
+            normalized_score = round(score_cap, 1)
+            credit_score = min(credit_score, score_cap * 9.0)
         risk_grade = self._grade_from_normalized(normalized_score)
         recommendation = "REJECT" if normalized_score < 50 else "APPROVE"
         if 60 <= normalized_score < 70:
@@ -195,7 +261,6 @@ class CreditScoringModel:
         if recommendation == "REJECT":
             risk_grade = "D"
 
-        extracted_revenue = float(annual_revenue_cr or form_turnover_cr or 0.0)
         premium_bps = compute_interest_premium_bps(risk_grade)
         pricing = float(format_interest_rate(risk_grade, settings.base_interest_rate)["effective_rate"].rstrip("%"))
         # Compute limit after grade is determined.
@@ -221,7 +286,25 @@ class CreditScoringModel:
             ],
             human_input_impact_points=round(human_input_impact, 2),
             rule_hits=rule_hits,
+            scoring_warnings=scoring_warnings,
         )
+
+    @staticmethod
+    def _doc_only_score_features(features: Dict[str, float]) -> Dict[str, float]:
+        """
+        Keep credit score document-driven.
+        Research/news signals are advisory and must not directly drive score/reject.
+        """
+        score_features = dict(features)
+        for key in (
+            "has_promoter_fraud_news",
+            "has_nclt_proceedings",
+            "has_litigation",
+            "has_sector_headwinds",
+            "has_mca_struck_off_associates",
+        ):
+            score_features[key] = 0.0
+        return score_features
 
     def _load_or_train(self) -> ModelArtifacts:
         if self.classifier_path.exists() and self.regressor_path.exists():
@@ -280,15 +363,25 @@ class CreditScoringModel:
     @staticmethod
     def _grade_from_normalized(score: float) -> str:
         s = max(0.0, min(100.0, score))
-        if 90 <= s <= 100:
+        if s >= 90:
             return "AAA"
-        if 80 <= s < 90:
+        if s >= 80:
+            return "AA"
+        if s >= 75:
             return "AA-"
-        if 70 <= s < 80:
+        if s >= 70:
+            return "A+"
+        if s >= 65:
             return "A"
-        if 60 <= s < 70:
+        if s >= 60:
+            return "A-"
+        if s >= 55:
+            return "BBB+"
+        if s >= 50:
             return "BBB"
-        if 50 <= s < 60:
+        if s >= 45:
+            return "BB+"
+        if s >= 40:
             return "BB"
         return "B"
 

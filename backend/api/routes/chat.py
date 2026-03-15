@@ -13,7 +13,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.llm.llm_client import llm_call
 from backend.api.deps import RequestContext, get_request_context
-from backend.config import settings
 from backend.database import get_db
 from backend.models.db_models import CamOutput, ChatHistory, ResearchFindingRecord, RiskScore
 from backend.schemas.common import build_response
@@ -139,18 +138,15 @@ Use Indian lending terms where relevant (DSCR, MPBF, NPA, CIRP, DRT, GSTR-3B).
 COMPANY CONTEXT:
 {context}
 
-QUESTION:
+    QUESTION:
 {message}
 """
 
     try:
-        # Prefer Gemini for chat — it handles long CAM context well
-        use_gemini = bool(settings.gemini_api_key)
         response = llm_call(
             prompt,
             task="chat_rag",
             max_tokens=1200,
-            force_provider="gemini" if use_gemini else None,
         )
         answer = response.text
         model_info = {
@@ -158,11 +154,10 @@ QUESTION:
             "model": response.model_used,
             "fallback_triggered": response.fallback_triggered,
             "latency_ms": response.latency_ms,
-            "gemini_enabled": use_gemini,
         }
     except Exception as exc:
         answer = _fallback_answer(message, context)
-        model_info = {"error": str(exc), "gemini_enabled": bool(settings.gemini_api_key)}
+        model_info = {"error": str(exc)}
 
     try:
         db.add(

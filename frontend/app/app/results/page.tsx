@@ -100,16 +100,78 @@ export default function ResultsPage() {
     return () => { cancelled = true; };
   }, [companyId, storeResult]);
 
+  useEffect(() => {
+    if (!result) return;
+    const limitDebug = result?.limit_debug || {};
+    const company = result?.company || {};
+    const extractedData = result?.financials || result?.parsed_financials?.financials || {};
+    const loanData = result?.loan || {};
+    const extractedRevenue =
+      limitDebug.extracted_revenue ??
+      extractedData.annual_revenue_cr ??
+      extractedData.revenue_cr ??
+      extractedData.gross_receipts_cr;
+
+    console.log('LIMIT DEBUG:', {
+      form_turnover:
+        limitDebug.form_turnover ?? company.turnover ?? company.annual_turnover_cr,
+      extracted_revenue: extractedRevenue,
+      requested_amount:
+        limitDebug.requested_amount ?? loanData.loan_amount_cr ?? result?.decision?.recommended_loan_amount,
+      using_value:
+        limitDebug.using_value ??
+        (extractedRevenue ? 'extracted_data.annual_revenue_cr' : 'company.turnover'),
+    });
+  }, [result]);
+
   const decision = result?.decision || {};
   const score = Number(
     decision.normalized_score ?? (decision.credit_score ? (Number(decision.credit_score) / 900) * 100 : 0)
   );
-  const dueDiligence = result?.due_diligence || {};
-  const borrowerContext = dueDiligence?.borrower_context || {};
+  const dueDiligence = useMemo(() => result?.due_diligence || {}, [result]);
+  const borrowerContext = useMemo(() => dueDiligence?.borrower_context || {}, [dueDiligence]);
   const humanImpactPoints = Number(decision?.human_input_impact_points || 0);
-  const hasBorrowerInput = Object.values(borrowerContext).some(
-    (value) => String(value || '').trim().length > 0
-  );
+  const hasBorrowerInput = useMemo(() => {
+    const borrowerFields = [
+      borrowerContext.borrower_finance_officer_name,
+      borrowerContext.borrower_finance_officer_role,
+      borrowerContext.borrower_finance_officer_email,
+      borrowerContext.borrower_finance_officer_phone,
+      borrowerContext.finance_officer_name,
+      borrowerContext.finance_officer_role,
+      borrowerContext.finance_officer_email,
+      borrowerContext.finance_officer_phone,
+      borrowerContext.borrower_business_highlights,
+      borrowerContext.business_highlights,
+      borrowerContext.borrower_major_customers,
+      borrowerContext.major_customers,
+      borrowerContext.borrower_contingent_liabilities,
+      borrowerContext.contingent_liabilities,
+      borrowerContext.borrower_planned_capex,
+      borrowerContext.planned_capex,
+      borrowerContext.borrower_disclosed_risks,
+      borrowerContext.disclosed_risks,
+    ];
+    return borrowerFields.some((value) => String(value || '').trim().length > 0);
+  }, [borrowerContext]);
+
+  const anomalyFlags = useMemo(() => {
+    const cv = result?.cross_validation || {};
+    const anomalies = Array.isArray(cv?.anomalies) ? cv.anomalies : [];
+    const fraudIndicators = Array.isArray(cv?.fraud_indicators) ? cv.fraud_indicators : [];
+    const researchAlerts = Array.isArray(result?.research_alerts) ? result.research_alerts : [];
+    const fraudAsFlags = fraudIndicators.map((item: any) => ({
+      title: String(item?.indicator || 'Fraud indicator'),
+      details: `Source: ${String(item?.source || 'unknown')}${item?.confidence != null ? ` · confidence ${Math.round(Number(item.confidence) * 100)}%` : ''}`,
+      severity: String(item?.severity || 'MEDIUM'),
+    }));
+    const researchAsFlags = researchAlerts.map((item: any) => ({
+      title: `Research Alert: ${String(item?.title || 'Critical red flag')}`,
+      details: `Advisory only (does not change score). ${String(item?.summary || '')} Source: ${String(item?.source_name || 'Web')}`,
+      severity: String(item?.severity || 'HIGH'),
+    }));
+    return [...anomalies, ...fraudAsFlags, ...researchAsFlags];
+  }, [result]);
 
   const fiveC = useMemo(() => {
     // Use backend-computed Five Cs if available (from five_c_analyzer)
@@ -266,7 +328,7 @@ export default function ResultsPage() {
 
           {/* Anomaly flags */}
           <div className="xl:col-span-1">
-            <AnomalyFlags anomalies={result?.cross_validation?.anomalies || []} />
+            <AnomalyFlags anomalies={anomalyFlags} />
           </div>
 
           {/* Five Cs Radar + GST chart — spans 2 cols */}
@@ -329,7 +391,10 @@ export default function ResultsPage() {
                   <p className="text-ob-muted">Integrity: <span className="font-mono text-ob-text">{formatRatio(Number(dueDiligence.management_integrity_score || 0), 1, '/10')}</span></p>
                 </div>
               ) : (
-                <p className="text-ob-muted text-[12px]">No borrower inputs captured.</p>
+                <p className="text-ob-muted text-[12px]">
+                  No borrower clarifications captured. Expected any of: finance officer details, business highlights,
+                  major customers, contingent liabilities, planned capex, or disclosed risks.
+                </p>
               )}
             </div>
 

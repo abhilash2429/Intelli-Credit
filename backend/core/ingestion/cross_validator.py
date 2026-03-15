@@ -219,9 +219,6 @@ class CrossValidator:
         *,
         company_name: str,
         extracted_data: Optional[Dict[str, Any]] = None,
-        bank_metrics: Optional[BankStatementMetrics] = None,
-        research_findings: Optional[list] = None,
-        gst_mismatch: Optional[MismatchReport] = None,
     ) -> Dict[str, Any]:
         """
         Build relationship-first graph from extracted entities.
@@ -307,38 +304,52 @@ class CrossValidator:
                 }
             )
 
-        # Legacy weak association support (still used by UI disclosure block)
-        weak_associations: List[Dict[str, Any]] = []
-        if not links and bank_metrics and bank_metrics.suspected_shell_company_transfers:
-            for transfer in bank_metrics.suspected_shell_company_transfers[:5]:
-                weak_associations.append(
-                    {
-                        "entity": transfer,
-                        "signal": "shell_transfer",
-                        "confidence": "LOW",
-                    }
-                )
-        if gst_mismatch and gst_mismatch.suspected_circular_trading:
-            weak_associations.append(
+        strategic_partners = data.get("strategic_partners", []) or []
+        for i, partner in enumerate(strategic_partners[:3]):
+            node_id = f"partner_{i}"
+            label = str(partner.get("name", f"Strategic Partner {i + 1}"))
+            nodes.append(
                 {
-                    "entity": "GST Circular Trading Party",
-                    "signal": "gst_circular",
-                    "confidence": "LOW",
+                    "id": node_id,
+                    "label": label,
+                    "type": "counterparty",
+                    "risk": "LOW",
                 }
             )
-        if research_findings and not links:
-            for finding in research_findings[:3]:
-                source_name = getattr(finding, "source_name", None) or (
-                    finding.get("source_name") if isinstance(finding, dict) else None
-                )
-                if source_name:
-                    weak_associations.append(
-                        {
-                            "entity": str(source_name),
-                            "signal": "research_finding",
-                            "confidence": "LOW",
-                        }
-                    )
+            links.append(
+                {
+                    "source": "main",
+                    "target": node_id,
+                    "value": 14,
+                    "confidence": "LOW",
+                    "label": str(partner.get("relationship", "Strategic Partner")),
+                }
+            )
+
+        rating_agencies = data.get("rating_agencies", []) or []
+        for i, agency in enumerate(rating_agencies[:2]):
+            node_id = f"rating_{i}"
+            label = str(agency.get("name", f"Rating Agency {i + 1}"))
+            nodes.append(
+                {
+                    "id": node_id,
+                    "label": label,
+                    "type": "counterparty",
+                    "risk": "LOW",
+                }
+            )
+            links.append(
+                {
+                    "source": "main",
+                    "target": node_id,
+                    "value": 12,
+                    "confidence": "LOW",
+                    "label": str(agency.get("relationship", "Rating Agency")),
+                }
+            )
+
+        # Legacy weak association support (still used by UI disclosure block)
+        weak_associations: List[Dict[str, Any]] = []
 
         # Compatibility: provide `edges` and explicit counters, while retaining `links`.
         edges = [

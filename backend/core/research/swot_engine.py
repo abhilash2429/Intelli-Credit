@@ -57,7 +57,12 @@ def generate_swot(extracted_data: dict, grade: str, score: float) -> dict:
         strengths.append("GST reconciliation clean - 0% mismatch, no circular trading")
 
     # ── WEAKNESSES ──
-    customer_conc = extracted_data.get("customer_concentration_top5_pct", 0)
+    customer_conc = float(
+        extracted_data.get("customer_concentration_top5_pct")
+        or extracted_data.get("customer_concentration_pct")
+        or extracted_data.get("customer_concentration")
+        or 0.0
+    )
     if customer_conc > 50:
         weaknesses.append(
             f"Customer concentration risk - top 5 = {format_percentage(customer_conc)} of revenue"
@@ -179,7 +184,12 @@ def build_swot_extracted_data(
         ),
         "revenue_cagr_3yr": float(features.get("revenue_cagr_3yr", 0.0) or 0.0),
         "gst_mismatch_pct": gst_mismatch_pct,
-        "customer_concentration_top5_pct": float(financials.get("customer_concentration_top5_pct", 0.0) or 0.0),
+        "customer_concentration_top5_pct": float(
+            financials.get("customer_concentration_top5_pct")
+            or financials.get("customer_concentration_pct")
+            or financials.get("customer_concentration")
+            or 0.0
+        ),
         "current_ratio": float(financials.get("current_ratio", 0.0) or 0.0),
         "pat_margin_pct": float(financials.get("pat_margin_pct", 0.0) or 0.0),
         "ev_loi_cr": float(financials.get("ev_loi_cr", 0.0) or 0.0),

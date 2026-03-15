@@ -1,5 +1,6 @@
 """
 Research orchestration with Crawl4AI-powered scraping, live Tavily search, and deterministic fallback.
+Live web outputs are hard-capped at 20 per run.
 """
 
 from __future__ import annotations
@@ -9,11 +10,13 @@ import uuid
 from dataclasses import dataclass
 from datetime import date
 from typing import List, Optional
+from urllib.parse import urlparse
 
 from backend.config import settings
 from backend.core.india_context import red_flag_keywords
 from backend.core.research.crawl4ai_scraper import Crawl4AIScraper
 from backend.core.research.ecourt_scraper import ECourtsScraper
+from backend.core.research.firecrawl_client import FirecrawlClient
 from backend.core.research.finding_extractor import FindingExtractor
 from backend.core.research.tavily_client import TavilyClient
 from backend.core.research.mca_scraper import MCAScraper
@@ -24,7 +27,17 @@ from backend.schemas.credit import FindingType, MCAReport, ResearchFinding, Seve
 
 logger = get_logger(__name__)
 
-AGENT_TOOLS = ["crawl4ai_scrape", "tavily_search", "mca_lookup", "court_search", "news_search", "keyword_scan"]
+AGENT_TOOLS = [
+    "tavily_search",
+    "firecrawl_search",
+    "firecrawl_scrape",
+    "crawl4ai_scrape",
+    "mca_lookup",
+    "court_search",
+    "news_search",
+    "keyword_scan",
+]
+MAX_LIVE_OUTPUTS_PER_RUN = 20
 
 RESEARCH_CHECKLIST = [
     "Search fraud/default/enforcement actions",
@@ -41,6 +54,7 @@ class ResearchBundle:
     mca_report: MCAReport
     checklist_executed: List[str]
     research_job_id: str = ""
+    run_metrics: dict[str, int | bool] | None = None
 
 
 class WebResearchAgent:
@@ -58,12 +72,17 @@ class WebResearchAgent:
         self.crawl4ai = Crawl4AIScraper()
         self.live_mode = settings.research_mode.lower() == "live"
         self.tavily_client = None
+        self.firecrawl_client = None
         if self.live_mode and settings.tavily_api_key:
             try:
                 self.tavily_client = TavilyClient()
             except Exception as exc:
                 logger.warning("research.tavily_init_failed", error=str(exc))
-                self.live_mode = False
+        if self.live_mode and settings.firecrawl_api_key:
+            try:
+                self.firecrawl_client = FirecrawlClient()
+            except Exception as exc:
+                logger.warning("research.firecrawl_init_failed", error=str(exc))
         self.job_id = ""
 
     async def run(
@@ -77,35 +96,52 @@ class WebResearchAgent:
     ) -> ResearchBundle:
         self.job_id = str(uuid.uuid4())
         findings: List[ResearchFinding] = []
+        run_metrics: dict[str, int | bool] = {
+            "live_mode_enabled": self.live_mode,
+            "output_cap": min(max(int(settings.max_research_sources_per_company), 1), MAX_LIVE_OUTPUTS_PER_RUN),
+        }
 
         mca_report = await self.mca_scraper.lookup(company_name, cin=cin)
         findings.extend(self._mca_findings(mca_report))
         findings.extend(await self.ecourts_scraper.search(company_name))
 
-        if self.live_mode and self.tavily_client is not None:
-            findings.extend(
-                await self._run_live_tavily(
-                    company_name=company_name,
-                    sector=sector,
-                    cin=cin,
-                    gstin=gstin,
-                    promoter_names=promoter_names or [],
-                )
+        if self.live_mode and (self.tavily_client is not None or self.firecrawl_client is not None):
+            live_findings, live_metrics = await self._run_live_tavily(
+                company_name=company_name,
+                sector=sector,
+                cin=cin,
+                gstin=gstin,
+                promoter_names=promoter_names or [],
             )
+            findings.extend(live_findings)
+            run_metrics.update(live_metrics)
         else:
             findings.extend(await self.news_scraper.search_company(company_name, sector))
             for promoter in promoter_names or []:
                 findings.extend(await self.news_scraper.search_promoter(promoter))
             findings.extend(self._infer_regulatory_findings(company_name, sector))
+            run_metrics.update(
+                {
+                    "queries_built": 0,
+                    "queries_executed": 0,
+                    "urls_selected_for_scrape": 0,
+                    "urls_scraped_successfully": 0,
+                    "live_findings_before_cap": 0,
+                    "live_findings_returned": 0,
+                    "live_fallback_used": 0,
+                }
+            )
 
         findings.extend(self._run_keyword_scan(findings))
         findings = self._deduplicate(findings)
+        run_metrics["total_findings_after_dedupe"] = len(findings)
 
         return ResearchBundle(
             findings=findings,
             mca_report=mca_report,
             checklist_executed=RESEARCH_CHECKLIST,
             research_job_id=self.job_id,
+            run_metrics=run_metrics,
         )
 
     async def _run_live_tavily(
@@ -116,7 +152,8 @@ class WebResearchAgent:
         cin: str | None,
         gstin: str | None,
         promoter_names: List[str],
-    ) -> List[ResearchFinding]:
+    ) -> tuple[List[ResearchFinding], dict[str, int | bool]]:
+        output_cap = min(max(int(settings.max_research_sources_per_company), 1), MAX_LIVE_OUTPUTS_PER_RUN)
         queries = get_all_queries(
             company_name=company_name,
             sector=sector,
@@ -125,27 +162,60 @@ class WebResearchAgent:
             gstin=gstin,
             depth=settings.research_depth,
         )
+        # De-duplicate queries while preserving priority order.
+        deduped: list[dict] = []
+        seen_queries: set[str] = set()
+        for q in queries:
+            q_text = str(q.get("query", "")).strip().lower()
+            if not q_text or q_text in seen_queries:
+                continue
+            seen_queries.add(q_text)
+            deduped.append(q)
+        queries = deduped[: max(1, int(settings.max_live_queries))]
         logger.info("research.live.queries_built", count=len(queries), company=company_name)
 
-        sem = asyncio.Semaphore(5)
+        sem = asyncio.Semaphore(max(1, int(settings.live_query_concurrency)))
         query_results: list[tuple[dict, list[dict]]] = []
-        payment_required = asyncio.Event()
+        primary_provider_quota_hit = asyncio.Event()
+        primary_provider_errors = 0
 
         async def _run_query(q: dict) -> None:
-            if payment_required.is_set():
-                return
             async with sem:
-                if payment_required.is_set():
-                    return
+                nonlocal primary_provider_errors
                 try:
-                    results = await asyncio.to_thread(
-                        self.tavily_client.search,  # type: ignore[reportOptionalMemberAccess]
-                        q["query"],
-                        num_results=min(
-                            settings.max_tavily_results_per_search,
-                            settings.max_research_sources_per_company,
-                        ),
-                    )
+                    results: list[dict] = []
+                    # Keep per-query fanout compact to reduce crawl latency.
+                    limit = min(int(settings.max_tavily_results_per_search), output_cap, 4)
+
+                    # Primary preference: Tavily (if configured)
+                    if self.tavily_client is not None:
+                        try:
+                            results = await asyncio.to_thread(
+                                self.tavily_client.search,  # type: ignore[reportOptionalMemberAccess]
+                                q["query"],
+                                num_results=limit,
+                            )
+                        except Exception as exc:
+                            err = str(exc)
+                            primary_provider_errors += 1
+                            logger.warning("research.live.tavily_failed", query=q["query"][:120], error=err)
+                            if "429" in err or "quota" in err.lower() or "unauthorized" in err.lower() or "401" in err:
+                                primary_provider_quota_hit.set()
+
+                            # Provider failover to Firecrawl for this query
+                            if self.firecrawl_client is not None:
+                                results = await asyncio.to_thread(
+                                    self.firecrawl_client.search,  # type: ignore[reportOptionalMemberAccess]
+                                    q["query"],
+                                    num_results=limit,
+                                )
+                    elif self.firecrawl_client is not None:
+                        results = await asyncio.to_thread(
+                            self.firecrawl_client.search,  # type: ignore[reportOptionalMemberAccess]
+                            q["query"],
+                            num_results=limit,
+                        )
+
                     query_results.append((q, results))
                     logger.info(
                         "research.live.query_done",
@@ -154,16 +224,18 @@ class WebResearchAgent:
                     )
                 except Exception as exc:
                     err = str(exc)
+                    primary_provider_errors += 1
                     logger.warning("research.live.query_failed", query=q["query"][:120], error=err)
-                    if "429" in err or "quota" in err.lower():
-                        payment_required.set()
+                    if "429" in err or "quota" in err.lower() or "unauthorized" in err.lower() or "401" in err:
+                        primary_provider_quota_hit.set()
 
         await asyncio.gather(*[_run_query(q) for q in queries])
 
-        if payment_required.is_set() and not query_results:
+        successful_query_count = sum(1 for _, res in query_results if res)
+        if successful_query_count == 0:
             logger.warning(
                 "research.live.fallback_deterministic",
-                reason="tavily_quota_exceeded",
+                reason="all_live_search_providers_failed",
                 company=company_name,
             )
             fallback: List[ResearchFinding] = []
@@ -171,23 +243,58 @@ class WebResearchAgent:
             for promoter in promoter_names:
                 fallback.extend(await self.news_scraper.search_promoter(promoter))
             fallback.extend(self._infer_regulatory_findings(company_name, sector))
-            return fallback
+            fallback = fallback[:output_cap]
+            return fallback, {
+                "queries_built": len(queries),
+                "queries_executed": len(query_results),
+                "urls_selected_for_scrape": 0,
+                "urls_scraped_successfully": 0,
+                "live_findings_before_cap": len(fallback),
+                "live_findings_returned": len(fallback),
+                "live_fallback_used": 1,
+                "output_cap": output_cap,
+                "primary_provider_quota_hit": primary_provider_quota_hit.is_set(),
+                "primary_provider_errors": primary_provider_errors,
+            }
 
         # Gather unique URLs to deep-scrape with Crawl4AI
         url_to_meta: dict[str, tuple[dict, dict]] = {}
+        filtered_out_count = 0
         for query_meta, results in query_results:
+            query_type = str(query_meta.get("type", "")).upper()
             for result in results:
                 url = result.get("url", "")
-                if url and not self._is_excluded_domain(url) and url not in url_to_meta:
+                if not url:
+                    continue
+                if self._is_excluded_domain(url):
+                    filtered_out_count += 1
+                    continue
+                if settings.research_strict_source_filter and not self._is_allowed_source(url, query_type):
+                    filtered_out_count += 1
+                    continue
+                if url not in url_to_meta:
                     url_to_meta[url] = (query_meta, result)
 
         # Limit total URLs to avoid overwhelming crawl budget
-        all_urls = list(url_to_meta.keys())[:settings.max_research_sources_per_company]
+        all_urls = list(url_to_meta.keys())[: min(output_cap, max(1, int(settings.max_live_urls_to_scrape)))]
         logger.info("research.crawl4ai.scraping", urls=len(all_urls), company=company_name)
+        scrape_concurrency = max(1, min(4, int(settings.live_query_concurrency)))
 
         # Use Crawl4AI to scrape all URLs in batch
-        scraped_contents = await self.crawl4ai.scrape_urls(all_urls, max_concurrency=4)
-        logger.info("research.crawl4ai.done", scraped=sum(1 for v in scraped_contents.values() if v))
+        if self.firecrawl_client is not None:
+            scraped_contents = await self.firecrawl_client.scrape_urls(all_urls, max_concurrency=scrape_concurrency)
+            # Fallback failed pages to Crawl4AI/httpx pipeline
+            failed_urls = [url for url, content in scraped_contents.items() if not content]
+            if failed_urls:
+                crawl4ai_fallback = await self.crawl4ai.scrape_urls(failed_urls, max_concurrency=scrape_concurrency)
+                for url, content in crawl4ai_fallback.items():
+                    if content:
+                        scraped_contents[url] = content
+        else:
+            scraped_contents = await self.crawl4ai.scrape_urls(all_urls, max_concurrency=scrape_concurrency)
+
+        scraped_success = sum(1 for v in scraped_contents.values() if v)
+        logger.info("research.crawl4ai.done", scraped=scraped_success)
 
         findings: List[ResearchFinding] = []
         for url, content in scraped_contents.items():
@@ -207,8 +314,26 @@ class WebResearchAgent:
                 company_name=company_name,
             )
             findings.extend([self._to_research_finding(item) for item in extracted])
+            if len(findings) >= output_cap:
+                break
 
-        return findings
+        uncapped_count = len(findings)
+        findings = findings[:output_cap]
+        return findings, {
+            "queries_built": len(queries),
+            "queries_executed": len(query_results),
+            "urls_selected_for_scrape": len(all_urls),
+            "urls_scraped_successfully": scraped_success,
+            "live_findings_before_cap": uncapped_count,
+            "live_findings_returned": len(findings),
+            "live_fallback_used": 0,
+            "output_cap": output_cap,
+            "search_provider": "tavily" if self.tavily_client is not None else "firecrawl",
+            "scrape_provider": "firecrawl+crawl4ai_fallback" if self.firecrawl_client is not None else "crawl4ai",
+            "primary_provider_quota_hit": primary_provider_quota_hit.is_set(),
+            "primary_provider_errors": primary_provider_errors,
+            "urls_filtered_out": filtered_out_count,
+        }
 
     @staticmethod
     def _mca_findings(mca_report: MCAReport) -> List[ResearchFinding]:
@@ -313,7 +438,7 @@ class WebResearchAgent:
 
     @staticmethod
     def _is_excluded_domain(url: str) -> bool:
-        excluded = [
+        excluded_domains = [
             "amazon.in",
             "flipkart.com",
             "justdial.com",
@@ -326,7 +451,74 @@ class WebResearchAgent:
             "youtube.com",
         ]
         low = url.lower()
-        return any(domain in low for domain in excluded)
+        if any(domain in low for domain in excluded_domains):
+            return True
+
+        # Skip heavy or non-HTML assets that are slow to crawl and low-value for narrative extraction.
+        # PDFs are explicitly allowed since legal/MCA evidence often arrives as PDF documents.
+        blocked_extensions = (
+            ".zip",
+            ".rar",
+            ".7z",
+            ".tar",
+            ".gz",
+            ".jpg",
+            ".jpeg",
+            ".png",
+            ".gif",
+            ".webp",
+            ".svg",
+            ".mp3",
+            ".mp4",
+            ".avi",
+            ".mov",
+        )
+        if low.split("?", 1)[0].endswith(blocked_extensions):
+            return True
+
+        return False
+
+    @staticmethod
+    def _domain_matches(url: str, allowed_domains: list[str]) -> bool:
+        try:
+            host = (urlparse(url).hostname or "").lower()
+        except Exception:
+            return False
+        if not host:
+            return False
+        normalized = host[4:] if host.startswith("www.") else host
+        for domain in allowed_domains:
+            d = domain.strip().lower()
+            if not d:
+                continue
+            if normalized == d or normalized.endswith(f".{d}"):
+                return True
+        return False
+
+    @staticmethod
+    def _is_allowed_source(url: str, query_type: str) -> bool:
+        legal_types = {"LITIGATION"}
+        mca_types = {"MCA_FILING"}
+        regulatory_types = {"REGULATORY_ACTION"}
+        news_types = {"SECTOR_NEWS", "COMPANY_NEWS", "FRAUD_ALERT", "PROMOTER_BACKGROUND"}
+
+        if query_type in legal_types:
+            return WebResearchAgent._domain_matches(url, settings.legal_domains)
+        if query_type in mca_types:
+            return WebResearchAgent._domain_matches(url, settings.mca_domains)
+        if query_type in regulatory_types:
+            return WebResearchAgent._domain_matches(url, settings.regulatory_domains)
+        if query_type in news_types:
+            return WebResearchAgent._domain_matches(url, settings.news_domains)
+
+        # Default strict behavior: allow only from the union of trusted lists.
+        all_allowed = (
+            settings.news_domains
+            + settings.legal_domains
+            + settings.mca_domains
+            + settings.regulatory_domains
+        )
+        return WebResearchAgent._domain_matches(url, all_allowed)
 
     @staticmethod
     def _to_research_finding(item: dict) -> ResearchFinding:

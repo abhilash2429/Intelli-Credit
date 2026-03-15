@@ -8,7 +8,7 @@ import asyncio
 import re
 import uuid
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -139,10 +139,19 @@ class IntelliCreditPipeline:
         )
         due = due_result.scalars().first()
 
+        loan_result = await db.execute(
+            select(LoanApplication)
+            .where(LoanApplication.company_id == company_uuid)
+            .order_by(LoanApplication.created_at.desc())
+            .limit(1)
+        )
+        loan = loan_result.scalars().first()
+
         return {
             "company": company,
             "documents": docs,
             "due_diligence": due,
+            "loan_application": loan,
         }
 
     async def _execute(
@@ -156,6 +165,7 @@ class IntelliCreditPipeline:
         company: Company = data["company"]
         documents: List[Document] = data["documents"]
         due: Optional[DueDiligenceRecord] = data["due_diligence"]
+        loan: Optional[LoanApplication] = data.get("loan_application")
 
         run = await get_latest_run(db, company_id)
         if run is None:
@@ -168,7 +178,7 @@ class IntelliCreditPipeline:
             progress_pct=15,
             message="Extracting structured content from uploaded documents",
         )
-        parsed_financials = await self._parse_documents(db, company_id, documents)
+        parsed_financials = await self._parse_documents(db, company_id, documents, company=company)
 
         await update_run(
             db,
@@ -217,6 +227,7 @@ class IntelliCreditPipeline:
         due_payload = self._due_payload(due)
         due_raw_payload = due.payload if (due and isinstance(due.payload, dict)) else {}
         research_summary = self._summarize_research(research_bundle.findings, research_bundle.mca_report)
+        research_alerts = self._build_research_alerts(research_bundle.findings)
         research_summary["cibil_commercial_score"] = get_mock_cibil_score(company.name)  # type: ignore[reportArgumentType]
         research_narrative = self.research_narrative.generate_cam_section(
             {
@@ -277,22 +288,72 @@ class IntelliCreditPipeline:
             }
         )
 
+        requested_loan_amount = float(
+            (
+                getattr(loan, "loan_amount_cr", None)
+                or getattr(company, "loan_amount_requested", None)
+                or 30.0
+            )
+            or 30.0
+        )
+        form_turnover = float(getattr(company, "annual_turnover_cr", 0.0) or 0.0)
+        financials = parsed_financials.get("financials", {}) or {}
+
+        extracted_revenue_candidates = [
+            ("extracted_data.revenue_cr", float(financials.get("revenue_cr") or 0.0)),
+            ("extracted_data.annual_revenue_cr", float(financials.get("annual_revenue_cr") or 0.0)),
+            ("extracted_data.gross_receipts_cr", float(financials.get("gross_receipts_cr") or 0.0)),
+            ("extracted_data.revenue_crore", float(financials.get("revenue_crore") or 0.0)),
+        ]
+        if financials.get("revenue_figures"):
+            revenue_series = [
+                float((item or {}).get("amount", 0.0) or 0.0)
+                for item in (financials.get("revenue_figures") or [])
+                if isinstance(item, dict)
+            ]
+            extracted_revenue_candidates.append(("extracted_data.revenue_figures", max(revenue_series or [0.0])))
+
+        extracted_revenue = 0.0
+        using_value = "company.turnover"
+        for field_name, value in extracted_revenue_candidates:
+            if value > 0:
+                extracted_revenue = value
+                using_value = field_name
+                break
+
+        logger.info(
+            "SCORING INPUT DEBUG: %s",
+            {
+                "form_turnover_cr": form_turnover,
+                "extracted_revenue_cr": extracted_revenue if extracted_revenue > 0 else None,
+                "which_is_used": using_value if extracted_revenue > 0 else "company.turnover",
+            },
+        )
+
+        if extracted_revenue <= 0:
+            logger.warning(
+                "WARNING: Using form turnover as fallback. Revenue extraction may have failed."
+            )
+
+        logger.info(
+            "LIMIT DEBUG: %s",
+            {
+                "form_turnover": form_turnover,
+                "extracted_revenue": extracted_revenue,
+                "requested_amount": requested_loan_amount,
+                "using_value": using_value if extracted_revenue > 0 else "company.turnover",
+            },
+        )
+
         decision = await asyncio.to_thread(
             self.scorer.predict,
             features,
-            requested_loan_amount=float(getattr(company, "loan_amount_requested", 30.0) or 30.0),
-            annual_revenue_cr=float(
-                parsed_financials.get("financials", {}).get("annual_revenue_cr")
-                or parsed_financials.get("financials", {}).get("revenue_crore")
-                or (
-                    (parsed_financials.get("financials", {}).get("revenue_figures") or [{}])[0].get("amount")
-                    if parsed_financials.get("financials", {}).get("revenue_figures")
-                    else 0.0
-                )
-                or getattr(company, "annual_turnover_cr", 0.0)
-                or 0.0
-            ),
-            form_turnover_cr=float(getattr(company, "annual_turnover_cr", 100.0) or 100.0),
+            requested_loan_amount=requested_loan_amount,
+            annual_revenue_cr=float(financials.get("annual_revenue_cr") or 0.0),
+            revenue_cr=float(financials.get("revenue_cr") or financials.get("revenue_crore") or 0.0),
+            gross_receipts_cr=float(financials.get("gross_receipts_cr") or 0.0),
+            form_turnover_cr=form_turnover,
+            revenue_source=using_value if extracted_revenue > 0 else "company.turnover",
             sector=company.sector or "other",  # type: ignore[reportArgumentType]
             loan_type="secured",
         )
@@ -354,9 +415,9 @@ class IntelliCreditPipeline:
                 "name": company.name,
                 "cin": company.cin,
                 "sector": company.sector,
-                "loan_amount_requested": getattr(company, "loan_amount_requested", 30.0),
-                "loan_tenor_months": getattr(company, "loan_tenor_months", 36),
-                "loan_purpose": getattr(company, "loan_purpose", "working_capital"),
+                "loan_amount_requested": requested_loan_amount,
+                "loan_tenor_months": int(getattr(loan, "tenure_months", None) or getattr(company, "loan_tenor_months", 36) or 36),
+                "loan_purpose": getattr(loan, "purpose", None) or getattr(company, "loan_purpose", "working_capital"),
             },
             decision=decision.model_dump(),
             explanation=explanation.model_dump(),
@@ -407,18 +468,14 @@ class IntelliCreditPipeline:
 
         # Build fraud fingerprinting graph with multi-signal corroboration
         fraud_graph_input = self._build_fraud_graph_input(
+            company_name=str(company.name or ""),
             shareholding_data=parsed_financials.get("shareholding_data", {}),
             financials=parsed_financials.get("financials", {}),
-            findings=research_bundle.findings,
-            mca_report=research_bundle.mca_report,
             due_payload=due_raw_payload,
         )
         fraud_graph = self.cross_validator.build_fraud_graph(
             company_name=company.name,  # type: ignore[reportArgumentType]
             extracted_data=fraud_graph_input,
-            bank_metrics=bank_metrics,
-            research_findings=research_bundle.findings,
-            gst_mismatch=gst_payload.get("mismatch_report"),
         )
 
         result_payload = {
@@ -434,10 +491,18 @@ class IntelliCreditPipeline:
             "shareholding_data": shareholding_data,
             "fraud_graph_input": fraud_graph_input,
             "fraud_graph": fraud_graph,
+            "limit_debug": {
+                "form_turnover": form_turnover,
+                "extracted_revenue": extracted_revenue,
+                "requested_amount": requested_loan_amount,
+                "using_value": using_value if extracted_revenue > 0 else "company.turnover",
+            },
             "five_cs": five_cs,
             "model_confidence": f"{model_confidence_pct}% agreement between rule and ML subsystems",
             "model_confidence_pct": model_confidence_pct,
             "research_findings": [f.model_dump() for f in research_bundle.findings],
+            "research_alerts": research_alerts,
+            "research_run_metrics": research_bundle.run_metrics or {},
             "research_cam_narrative": research_narrative,
             "due_diligence": due_payload,
             "cam_docx_path": cam_path,
@@ -524,9 +589,14 @@ class IntelliCreditPipeline:
             logger.warning("pipeline.delta_research_persist_failed", error=str(exc))
 
     async def _parse_documents(
-        self, db: AsyncSession, company_id: str, documents: List[Document]
+        self,
+        db: AsyncSession,
+        company_id: str,
+        documents: List[Document],
+        *,
+        company: Optional[Company] = None,
     ) -> Dict[str, Any]:
-        financial_docs = []
+        financial_docs: List[Tuple[Any, str]] = []
         gstr3b = None
         gstr2a = None
         gstr1 = None
@@ -603,7 +673,17 @@ class IntelliCreditPipeline:
                 or low.endswith(".png")
             ):
                 parsed = await asyncio.to_thread(self.pdf_parser.parse, path)  # type: ignore[reportArgumentType]
-                financial_docs.append(parsed)
+                expected_cin = str(getattr(company, "cin", "") or "").strip().upper()
+                parsed_cin = str(getattr(parsed, "cin_number", "") or "").strip().upper()
+                if expected_cin and parsed_cin and parsed_cin != expected_cin:
+                    logger.warning(
+                        "pipeline.document_skipped_cin_mismatch",
+                        file=path,
+                        expected_cin=expected_cin,
+                        parsed_cin=parsed_cin,
+                    )
+                    continue
+                financial_docs.append((parsed, path))
             elif low.endswith(".json") or low.endswith(".xml"):
                 if "gstr" in low:
                     bundle = await asyncio.to_thread(self.gst_parser.parse_file, path)  # type: ignore[reportArgumentType]
@@ -631,11 +711,50 @@ class IntelliCreditPipeline:
                         gst_turnover=20.0,
                     )
 
-        base_financial = financial_docs[0].model_dump() if financial_docs else {}
+        base_financial: Dict[str, Any] = {}
+        if financial_docs:
+            sorted_docs = sorted(
+                financial_docs,
+                key=lambda item: (
+                    self._financial_doc_priority(item[1], item[0]),
+                    -self._extract_revenue_from_financial_data(item[0].model_dump()),
+                ),
+            )
+            base_financial = sorted_docs[0][0].model_dump()
+            for parsed_doc, _path in sorted_docs[1:]:
+                doc_dump = parsed_doc.model_dump()
+                for key, val in doc_dump.items():
+                    if isinstance(val, list):
+                        existing = base_financial.get(key)
+                        if not isinstance(existing, list):
+                            base_financial[key] = list(val)
+                        else:
+                            seen_items = {str(item) for item in existing}
+                            for item in val:
+                                marker = str(item)
+                                if marker not in seen_items:
+                                    existing.append(item)
+                                    seen_items.add(marker)
+                        continue
+                    if key not in base_financial or base_financial.get(key) in (None, "", [], {}, 0, 0.0):
+                        base_financial[key] = val
+
+            extracted_doc_revenue, extracted_source = self._select_extracted_revenue_from_docs(sorted_docs)
+            if extracted_doc_revenue > 0:
+                base_financial["annual_revenue_cr"] = extracted_doc_revenue
+                base_financial["revenue_cr"] = extracted_doc_revenue
+                base_financial.setdefault("revenue_crore", extracted_doc_revenue)
+                logger.info(
+                    "pipeline.revenue_selected_from_documents",
+                    revenue_cr=extracted_doc_revenue,
+                    source=extracted_source,
+                )
 
         # Merge XLSX-extracted financials into base (XLSX takes precedence for numeric fields)
         if xlsx_financials:
             for key, val in xlsx_financials.items():
+                if key in {"annual_revenue_cr", "revenue_cr", "revenue_crore", "gross_receipts_cr"} and base_financial.get("annual_revenue_cr"):
+                    continue
                 if val is not None and val != 0.0:
                     base_financial[key] = val
                 elif key not in base_financial:
@@ -667,6 +786,51 @@ class IntelliCreditPipeline:
             "portfolio_data": portfolio_data,
         }
 
+    @staticmethod
+    def _financial_doc_priority(file_path: str, parsed_doc: Any) -> int:
+        low = str(file_path or "").lower()
+        parsed_type = str(getattr(parsed_doc, "document_type", ""))
+        if "annual_report" in low or "annual report" in low or parsed_type.endswith("ANNUAL_REPORT"):
+            return 0
+        if "financial_statement" in low or "financial statements" in low or parsed_type.endswith("FINANCIAL_STATEMENT"):
+            return 1
+        return 2
+
+    @staticmethod
+    def _extract_revenue_from_financial_data(financials: Dict[str, Any]) -> float:
+        direct = (
+            financials.get("annual_revenue_cr")
+            or financials.get("revenue_cr")
+            or financials.get("gross_receipts_cr")
+            or financials.get("revenue_crore")
+            or 0.0
+        )
+        direct_val = float(direct or 0.0)
+        if direct_val > 0:
+            return direct_val
+
+        revenue_figures = financials.get("revenue_figures") or []
+        if isinstance(revenue_figures, list):
+            values = [
+                float((entry or {}).get("amount", 0.0) or 0.0)
+                for entry in revenue_figures
+                if isinstance(entry, dict)
+            ]
+            if values:
+                return max(values)
+        return 0.0
+
+    def _select_extracted_revenue_from_docs(
+        self,
+        docs: List[Tuple[Any, str]],
+    ) -> Tuple[float, str]:
+        for parsed_doc, file_path in docs:
+            financials = parsed_doc.model_dump()
+            revenue = self._extract_revenue_from_financial_data(financials)
+            if revenue > 0:
+                return revenue, str(file_path)
+        return 0.0, ""
+
     def _build_gst_payload(self, parsed: Dict[str, Any]) -> Dict[str, Any]:
         gstr3b = parsed.get("gstr3b")
         gstr2a = parsed.get("gstr2a")
@@ -691,18 +855,37 @@ class IntelliCreditPipeline:
     @staticmethod
     def _build_fraud_graph_input(
         *,
+        company_name: str,
         shareholding_data: Dict[str, Any],
         financials: Dict[str, Any],
-        findings: List[Any],
-        mca_report: Any,
         due_payload: Dict[str, Any],
     ) -> Dict[str, Any]:
-        promoters = IntelliCreditPipeline._extract_promoter_entities(shareholding_data, due_payload)
-        subsidiaries = IntelliCreditPipeline._extract_subsidiaries(financials, findings)
-        mca_charges = IntelliCreditPipeline._extract_lenders(financials, mca_report)
+        promoters = IntelliCreditPipeline._extract_promoter_entities(
+            shareholding_data,
+            due_payload,
+            company_name=company_name,
+        )
+        subsidiaries = IntelliCreditPipeline._extract_subsidiaries(
+            financials,
+            company_name=company_name,
+        )
+        strategic_partners = IntelliCreditPipeline._extract_strategic_partners(
+            financials,
+            company_name=company_name,
+        )
+        rating_agencies = IntelliCreditPipeline._extract_rating_agencies(
+            financials,
+            company_name=company_name,
+        )
+        mca_charges = IntelliCreditPipeline._extract_lenders(
+            financials,
+            company_name=company_name,
+        )
         return {
             "promoters": promoters,
             "subsidiaries": subsidiaries,
+            "strategic_partners": strategic_partners,
+            "rating_agencies": rating_agencies,
             "mca_charges": mca_charges,
         }
 
@@ -710,6 +893,7 @@ class IntelliCreditPipeline:
     def _extract_promoter_entities(
         shareholding_data: Dict[str, Any],
         due_payload: Dict[str, Any],
+        company_name: str,
     ) -> List[Dict[str, Any]]:
         promoters: List[Dict[str, Any]] = []
         top_shareholders = shareholding_data.get("top_shareholders", []) or []
@@ -717,7 +901,7 @@ class IntelliCreditPipeline:
             if not isinstance(holder, dict):
                 continue
             name = str(holder.get("name", "")).strip()
-            if not name:
+            if not name or not IntelliCreditPipeline._is_valid_graph_entity_name(name, company_name):
                 continue
             promoters.append(
                 {
@@ -748,22 +932,20 @@ class IntelliCreditPipeline:
         if not promoters:
             for person in due_payload.get("key_management_persons", []) or []:
                 if isinstance(person, dict) and person.get("name"):
-                    promoters.append({"name": str(person["name"]), "holding_pct": 0.0, "pledge_pct": 0.0})
+                    name = str(person["name"]).strip()
+                    if IntelliCreditPipeline._is_valid_graph_entity_name(name, company_name):
+                        promoters.append({"name": name, "holding_pct": 0.0, "pledge_pct": 0.0})
         return promoters[:8]
 
     @staticmethod
-    def _extract_subsidiaries(financials: Dict[str, Any], findings: List[Any]) -> List[Dict[str, Any]]:
+    def _extract_subsidiaries(
+        financials: Dict[str, Any],
+        company_name: str,
+    ) -> List[Dict[str, Any]]:
         candidates: List[str] = []
         related = financials.get("related_party_transactions", []) or []
         if isinstance(related, list):
             candidates.extend([str(x) for x in related if x])
-
-        for finding in findings:
-            summary = getattr(finding, "summary", "") if not isinstance(finding, dict) else finding.get("summary", "")
-            snippet = getattr(finding, "raw_snippet", "") if not isinstance(finding, dict) else finding.get("raw_snippet", "")
-            combined = f"{summary} {snippet}".strip()
-            if combined:
-                candidates.append(combined)
 
         org_pattern = re.compile(
             r"\b([A-Z][A-Za-z0-9&.,()\- ]{2,90}(?:Pvt\.?\s*Ltd\.?|Private Limited|Limited|Ltd\.?|LLP|FZE|GmbH))\b"
@@ -780,6 +962,8 @@ class IntelliCreditPipeline:
                 continue
             for match in org_pattern.findall(text):
                 name = " ".join(match.split())
+                if not IntelliCreditPipeline._is_valid_graph_entity_name(name, company_name):
+                    continue
                 key = name.lower()
                 if key in seen:
                     continue
@@ -793,27 +977,75 @@ class IntelliCreditPipeline:
         return subsidiaries[:8]
 
     @staticmethod
-    def _extract_lenders(financials: Dict[str, Any], mca_report: Any) -> List[Dict[str, Any]]:
+    def _extract_strategic_partners(
+        financials: Dict[str, Any],
+        company_name: str,
+    ) -> List[Dict[str, Any]]:
+        related = financials.get("related_party_transactions", []) or []
+        if not isinstance(related, list):
+            return []
+        partners: List[Dict[str, Any]] = []
+        seen: set[str] = set()
+        org_pattern = re.compile(
+            r"\b([A-Z][A-Za-z0-9&.,()\- ]{2,90}(?:Corporation|Corp\.?|Inc\.?|Ltd\.?|Limited|Pvt\.?\s*Ltd\.?|LLP|FZE|GmbH|Bank|Trust))\b"
+        )
+        for text in related:
+            line = str(text or "").strip()
+            low = line.lower()
+            if not any(k in low for k in ("strategic", "partnership", "collaboration", "mou", "alliance")):
+                continue
+            for match in org_pattern.findall(line):
+                name = " ".join(match.split())
+                if not IntelliCreditPipeline._is_valid_graph_entity_name(name, company_name):
+                    continue
+                key = name.lower()
+                if key in seen:
+                    continue
+                seen.add(key)
+                partners.append({"name": name, "relationship": "Strategic Partner"})
+        return partners[:6]
+
+    @staticmethod
+    def _extract_rating_agencies(
+        financials: Dict[str, Any],
+        company_name: str,
+    ) -> List[Dict[str, Any]]:
+        related = financials.get("related_party_transactions", []) or []
+        if not isinstance(related, list):
+            return []
+        agencies: List[Dict[str, Any]] = []
+        seen: set[str] = set()
+        known = {
+            "crisil": "CRISIL Ratings",
+            "icra": "ICRA",
+            "care": "CARE Ratings",
+            "fitch": "Fitch Ratings",
+            "moodys": "Moody's",
+            "moody's": "Moody's",
+        }
+        for text in related:
+            line = str(text or "").strip()
+            low = line.lower()
+            if "rating" not in low and not any(k in low for k in known):
+                continue
+            for token, label in known.items():
+                if token in low:
+                    if IntelliCreditPipeline._is_valid_graph_entity_name(label, company_name):
+                        if label.lower() not in seen:
+                            seen.add(label.lower())
+                            agencies.append({"name": label, "relationship": "Rating Agency"})
+        return agencies[:4]
+
+    @staticmethod
+    def _extract_lenders(financials: Dict[str, Any], company_name: str) -> List[Dict[str, Any]]:
         lenders: List[Dict[str, Any]] = []
         seen: set[str] = set()
-
-        for charge in getattr(mca_report, "registered_charges", []) or []:
-            holder = str(getattr(charge, "lender", "")).strip()
-            if not holder:
-                continue
-            key = holder.lower()
-            if key in seen:
-                continue
-            seen.add(key)
-            amount = float(getattr(charge, "amount", 0.0) or 0.0)
-            amount_cr = round(amount / 1e7, 2) if amount > 1e5 else round(amount, 2)
-            lenders.append({"holder": holder, "amount_cr": amount_cr})
 
         for bank in financials.get("existing_bank_limits", []) or []:
             if not isinstance(bank, dict):
                 continue
             holder = str(bank.get("lender", "")).strip()
-            if not holder:
+            if not holder or not IntelliCreditPipeline._is_valid_graph_entity_name(holder, company_name):
                 continue
             key = holder.lower()
             if key in seen:
@@ -823,6 +1055,28 @@ class IntelliCreditPipeline:
             amount_cr = round(amount / 1e7, 2) if amount > 1e5 else round(amount, 2)
             lenders.append({"holder": holder, "amount_cr": amount_cr})
         return lenders[:10]
+
+    @staticmethod
+    def _is_valid_graph_entity_name(name: str, company_name: str) -> bool:
+        cleaned = " ".join(str(name or "").split()).strip(" -,:;.")
+        if len(cleaned) < 3:
+            return False
+        low = cleaned.lower()
+        if low == company_name.strip().lower():
+            return False
+        if re.fullmatch(r"(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\s+\d{4}", low):
+            return False
+        if re.search(r"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b", low):
+            return False
+        if low.startswith(("rs ", "rs.", "₹")):
+            return False
+        if re.search(r"\b(?:crore|lakh|lakhs|million|mn)\b", low):
+            return False
+        if any(k in low for k in ("raid", "raids", "fraud", "scam", "insolvency", "arbitration", "case")):
+            return False
+        if not re.search(r"[a-zA-Z]", cleaned):
+            return False
+        return True
 
     @staticmethod
     def _extract_promoters(due: Optional[DueDiligenceRecord]) -> List[str]:
@@ -878,6 +1132,34 @@ class IntelliCreditPipeline:
         }
 
     @staticmethod
+    def _build_research_alerts(findings: List[Any]) -> List[Dict[str, Any]]:
+        """
+        Build advisory-only external alerts from web research.
+        These alerts are for reviewer attention and do not drive numeric credit score.
+        """
+        alerts: List[Dict[str, Any]] = []
+        for finding in findings:
+            severity = str(getattr(finding, "severity", "INFORMATIONAL"))
+            raw_type = getattr(finding, "finding_type", "")
+            finding_type = str(getattr(raw_type, "value", raw_type))
+            if severity not in {"CRITICAL", "HIGH"}:
+                continue
+            if finding_type not in {"FRAUD_ALERT", "LITIGATION", "REGULATORY", "REGULATORY_ACTION"}:
+                continue
+            alerts.append(
+                {
+                    "title": str(getattr(finding, "headline", "") or "External Critical Red Flag"),
+                    "summary": str(getattr(finding, "summary", "") or ""),
+                    "severity": severity,
+                    "source_name": str(getattr(finding, "source_name", "Web")),
+                    "source_url": str(getattr(finding, "source_url", "")),
+                    "advisory_only": True,
+                }
+            )
+        # Keep UI concise.
+        return alerts[:8]
+
+    @staticmethod
     def _due_payload(due: Optional[DueDiligenceRecord]) -> Dict[str, Any]:
         if not due:
             return {
@@ -895,13 +1177,22 @@ class IntelliCreditPipeline:
             "finance_officer_role": payload.get("borrower_finance_officer_role", ""),
             "finance_officer_email": payload.get("borrower_finance_officer_email", ""),
             "finance_officer_phone": payload.get("borrower_finance_officer_phone", ""),
+            "borrower_finance_officer_name": payload.get("borrower_finance_officer_name", ""),
+            "borrower_finance_officer_role": payload.get("borrower_finance_officer_role", ""),
+            "borrower_finance_officer_email": payload.get("borrower_finance_officer_email", ""),
+            "borrower_finance_officer_phone": payload.get("borrower_finance_officer_phone", ""),
             "management_cooperation": payload.get("management_cooperation", ""),
             "inventory_levels": payload.get("inventory_levels", ""),
             "business_highlights": payload.get("borrower_business_highlights", ""),
+            "borrower_business_highlights": payload.get("borrower_business_highlights", ""),
             "major_customers": payload.get("borrower_major_customers", ""),
+            "borrower_major_customers": payload.get("borrower_major_customers", ""),
             "contingent_liabilities": payload.get("borrower_contingent_liabilities", ""),
+            "borrower_contingent_liabilities": payload.get("borrower_contingent_liabilities", ""),
             "planned_capex": payload.get("borrower_planned_capex", ""),
+            "borrower_planned_capex": payload.get("borrower_planned_capex", ""),
             "disclosed_risks": payload.get("borrower_disclosed_risks", ""),
+            "borrower_disclosed_risks": payload.get("borrower_disclosed_risks", ""),
         }
         return {
             "management_integrity_score": float(mgmt_rating if mgmt_rating is not None else 3) * 2,

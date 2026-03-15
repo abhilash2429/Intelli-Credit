@@ -27,6 +27,62 @@ from backend.schemas.credit import (
     MoneyAmount,
 )
 
+
+def parse_revenue_to_crore(raw_value: str | float | int, unit_hint: str = "") -> float:
+    """
+    Normalize monetary values to crore units.
+    """
+    clean = str(raw_value).replace("\u20b9", "").replace(",", "").strip()
+    try:
+        value = float(clean)
+    except (TypeError, ValueError):
+        return 0.0
+
+    unit_low = (unit_hint or "").lower()
+    if "lakh" in unit_low or "lac" in unit_low:
+        return value / 100.0
+    if "million" in unit_low or "mn" in unit_low:
+        return value / 10.0
+    if "crore" in unit_low or " cr" in f" {unit_low}" or unit_low.strip() == "cr":
+        return value
+
+    # Magnitude fallback
+    if value > 100000:
+        return value / 100.0
+    if value > 10000:
+        return value / 10.0
+    return value
+
+
+def extract_revenue(text: str) -> Optional[float]:
+    """
+    Extract annual revenue in crore from common Indian financial document formats.
+    """
+    match = re.search(
+        r"[Rr]evenue[\s\S]{0,160}?₹\s*([\d,]+(?:\.\d+)?)\s*(?:[Cc]r(?:ores?)?)\b",
+        text,
+    )
+    if match:
+        return float(match.group(1).replace(",", ""))
+
+    match = re.search(
+        r"[Rr]evenue[^0-9]{0,80}([\d,]+(?:\.\d+)?)\s*[Ll]akhs?\b",
+        text,
+    )
+    if match:
+        lakhs = float(match.group(1).replace(",", ""))
+        return lakhs / 100.0
+
+    match = re.search(
+        r"[Gg]ross\s+[Rr]eceipts[^0-9]*([\d,]+(?:\.\d+)?)",
+        text,
+    )
+    if match:
+        return float(match.group(1).replace(",", ""))
+
+    return None
+
+
 DOC_KEYWORDS = {
     DocumentType.ANNUAL_REPORT: [
         "directors' report",
@@ -193,15 +249,34 @@ class IntelliCreditPDFParser:
         pan = self._find_first(r"\b([A-Z]{5}[0-9]{4}[A-Z])\b", text)
         company_name = self._extract_company_name(text)
 
-        revenue = self._extract_money_series(
-            text,
-            patterns=[r"revenue(?: from operations)?[^\d]{0,20}([\d,]+(?:\.\d+)?)"],
-            period_hint="annual",
-            source="pdf",
-        )
+        revenue = []
+        extracted_revenue_cr = extract_revenue(text)
+        if extracted_revenue_cr is not None and extracted_revenue_cr > 0:
+            revenue = [
+                MoneyAmount(
+                    amount=round(extracted_revenue_cr, 2),
+                    period="annual_1",
+                    source="pdf",
+                    confidence_score=0.82,
+                )
+            ]
+        else:
+            revenue = self._extract_money_series(
+                text,
+                patterns=[
+                    r"revenue(?: from operations)?[\s\S]{0,120}?₹\s*([\d,]+(?:\.\d+)?)\s*(crores?|cr)?",
+                    r"revenue(?: from operations)?[\s\S]{0,120}?([\d,]+(?:\.\d+)?)\s*(crores?|cr|lakhs?|lacs?|million|mn)?",
+                    r"annual turnover[^\d]{0,40}([\d,]+(?:\.\d+)?)\s*(crores?|cr|lakhs?|lacs?|million|mn)?",
+                    r"gross receipts[^\d]{0,40}([\d,]+(?:\.\d+)?)\s*(crores?|cr|lakhs?|lacs?|million|mn)?",
+                ],
+                period_hint="annual",
+                source="pdf",
+            )
         profits = self._extract_money_series(
             text,
-            patterns=[r"(?:pat|profit after tax|net profit)[^\d]{0,20}([\d,]+(?:\.\d+)?)"],
+            patterns=[
+                r"(?:pat|profit after tax|net profit)[^\d]{0,30}([\d,]+(?:\.\d+)?)\s*(crores?|cr|lakhs?|lacs?|million|mn)?"
+            ],
             period_hint="annual",
             source="pdf",
         )
@@ -217,6 +292,33 @@ class IntelliCreditPDFParser:
             )
             if total_debt_match
             else None
+        )
+        customer_concentration_match = self._find_first(
+            r"(?:top\s*5\s*customers?|customer concentration(?:\s*risk)?)[^\d%]{0,40}(\d{1,3}(?:\.\d+)?)\s*%",
+            text,
+        )
+        customer_concentration_top5_pct = (
+            float(customer_concentration_match) if customer_concentration_match else None
+        )
+        crisil_rating_action_match = self._find_first(
+            r"\b(upgraded|downgraded|reaffirmed|assigned)\b",
+            text,
+        )
+        crisil_rating_action = (
+            str(crisil_rating_action_match).upper() if crisil_rating_action_match else None
+        )
+        crisil_rating_match = self._find_first(
+            r"(?:crisil|icra|care(?:\s+ratings)?)[\s\S]{0,60}?\b([A-Z]{1,4}[+-]?)\b",
+            text,
+        )
+        crisil_rating = str(crisil_rating_match).upper() if crisil_rating_match else None
+
+        strategic_partner_match = self._find_first(
+            r"(?:strategic partner(?:ship)?|collaboration|alliance|mou)[\s\S]{0,80}?\b([A-Z][A-Za-z0-9&.,()\- ]{2,80})\b",
+            text,
+        )
+        strategic_partnership_mentioned = (
+            " ".join(str(strategic_partner_match).split()) if strategic_partner_match else None
         )
 
         legal_disputes = self._extract_legal_disputes(text)
@@ -243,6 +345,10 @@ class IntelliCreditPDFParser:
                 company_name=company_name or "Unknown Company",
                 cin_number=cin,
                 pan_number=pan,
+                crisil_rating=crisil_rating,
+                crisil_rating_action=crisil_rating_action,
+                customer_concentration_top5_pct=customer_concentration_top5_pct,
+                strategic_partnership_mentioned=strategic_partnership_mentioned,
                 revenue_figures=revenue,
                 profit_figures=profits,
                 total_debt=total_debt,
@@ -296,14 +402,20 @@ class IntelliCreditPDFParser:
         for pattern in patterns:
             matches = re.findall(pattern, text, flags=re.IGNORECASE)
             for idx, m in enumerate(matches[:5], start=1):
-                raw = m if isinstance(m, str) else m[0]
-                try:
-                    val = float(raw.replace(",", ""))
-                except ValueError:
+                raw: str
+                unit_hint = ""
+                if isinstance(m, tuple):
+                    raw = str(m[0])
+                    if len(m) > 1:
+                        unit_hint = str(m[1] or "")
+                else:
+                    raw = str(m)
+                val = parse_revenue_to_crore(raw, unit_hint)
+                if val <= 0:
                     continue
                 amounts.append(
                     MoneyAmount(
-                        amount=val,
+                        amount=round(val, 2),
                         period=f"{period_hint}_{idx}",
                         source=source,
                         confidence_score=0.72,
@@ -365,12 +477,32 @@ class IntelliCreditPDFParser:
     @staticmethod
     def _extract_related_party_transactions(text: str) -> List[str]:
         findings = []
+        relationship_keywords = (
+            "related party",
+            "subsidiary",
+            "associate",
+            "joint venture",
+            "wholly owned",
+            "strategic partner",
+            "strategic partnership",
+            "collaboration",
+            "alliance",
+            "mou",
+            "rating agency",
+            "rated by",
+            "crisil",
+            "icra",
+            "care ratings",
+            "fitch",
+            "moody",
+        )
         for sentence in re.split(r"[.\n]", text):
-            if "related party" in sentence.lower():
+            low = sentence.lower()
+            if any(keyword in low for keyword in relationship_keywords):
                 clean = " ".join(sentence.split())
-                if clean:
-                    findings.append(clean[:200])
-        return findings[:8]
+                if clean and clean not in findings:
+                    findings.append(clean[:240])
+        return findings[:20]
 
     @staticmethod
     def _extract_auditor_qualifications(text: str) -> List[str]:

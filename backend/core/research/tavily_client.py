@@ -4,9 +4,8 @@ Tavily client wrapper with retries, normalization, and structured logs.
 
 from __future__ import annotations
 
+import time
 from typing import Any, List
-
-from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from backend.config import settings
 from backend.core.structured_logging import get_logger
@@ -30,11 +29,6 @@ class TavilyClient:
             raise RuntimeError("tavily-python is not installed") from exc
         self.client = SDKTavilyClient(api_key=self.api_key)
 
-    @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=2, max=20),
-        retry=retry_if_exception_type(Exception),
-    )
     def search(
         self,
         query: str,
@@ -44,20 +38,35 @@ class TavilyClient:
     ) -> list[dict[str, Any]]:
         limit = int(num_results or self.max_results)
         logger.info("tavily.search.start", query=query[:120], limit=limit, depth=search_depth)
-        
-        # We always want raw content for extraction
-        response = self.client.search(
-            query=query,
-            search_depth=search_depth,  # type: ignore[reportArgumentType]
-            max_results=limit,
-            include_raw_content=True,
-        )
-        
-        results = response.get("results", [])
-        normalized = [self._normalize_result(r) for r in results]
-        
-        logger.info("tavily.search.complete", query=query[:120], count=len(normalized))
-        return normalized
+
+        attempts = 2
+        last_exc: Exception | None = None
+        for attempt in range(1, attempts + 1):
+            try:
+                response = self.client.search(
+                    query=query,
+                    search_depth=search_depth,  # type: ignore[reportArgumentType]
+                    max_results=limit,
+                    include_raw_content=True,
+                )
+                results = response.get("results", [])
+                normalized = [self._normalize_result(r) for r in results]
+                logger.info("tavily.search.complete", query=query[:120], count=len(normalized))
+                return normalized
+            except Exception as exc:  # pragma: no cover - provider/runtime error
+                last_exc = exc
+                err = str(exc).lower()
+                non_retryable = any(
+                    token in err
+                    for token in ("invalidapikey", "wrong api key", "unauthorized", "401", "forbidden", "403")
+                )
+                if non_retryable or attempt == attempts:
+                    raise
+                time.sleep(0.4)
+
+        if last_exc:
+            raise last_exc
+        return []
 
     @staticmethod
     def _normalize_result(item: dict[str, Any]) -> dict[str, Any]:

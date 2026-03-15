@@ -57,7 +57,7 @@ class CAMGenerator:
         self._section_risk_assessment(doc, explanation, cross_validation)
         self._section_research(doc, research_findings, research_narrative)
         self._section_recommendation(doc, decision, explanation, due_diligence)
-        self._section_mitigants(doc)
+        self._section_mitigants(doc, cross_validation, features)
         self._section_annexures(doc, research_findings, explanation, due_diligence, decision)
         self._add_footer_page_number(doc)
 
@@ -139,10 +139,22 @@ class CAMGenerator:
         borrower_context: Dict[str, Any],
     ) -> None:
         doc.add_heading("SECTION 2: BORROWER PROFILE", level=1)
-        doc.add_paragraph("Company history and business description: [Auto-generated summary].")
-        doc.add_paragraph("Promoter background and track record: [From research agent outputs].")
-        doc.add_paragraph("Group structure and related entities: [Pending detailed legal charting].")
-        doc.add_paragraph(f"Shareholding pattern: [Notified by borrower for {company.get('name')}].")
+        doc.add_paragraph(
+            f"Borrower: {company.get('name', 'N/A')} | Sector: {company.get('sector', 'N/A')} | "
+            f"CIN: {company.get('cin', 'N/A')}."
+        )
+        business_highlights = (
+            borrower_context.get("borrower_business_highlights")
+            or borrower_context.get("business_highlights")
+            or "No additional borrower business highlights submitted."
+        )
+        major_customers = (
+            borrower_context.get("borrower_major_customers")
+            or borrower_context.get("major_customers")
+            or "Not disclosed in borrower clarification."
+        )
+        doc.add_paragraph(f"Business profile (borrower submission): {business_highlights}")
+        doc.add_paragraph(f"Major customers / revenue anchors: {major_customers}")
 
         doc.add_heading("Borrower Clarifications (Finance Officer Input)", level=2)
         officer_name = borrower_context.get("borrower_finance_officer_name") or borrower_context.get(
@@ -171,6 +183,11 @@ class CAMGenerator:
         if due_diligence.get("factory_capacity_utilization") is not None:
             doc.add_paragraph(
                 f"Declared capacity utilization: {format_percentage(due_diligence.get('factory_capacity_utilization'))}"  # type: ignore[reportArgumentType]
+            )
+        if due_diligence.get("management_integrity_score") is not None:
+            doc.add_paragraph(
+                "Management integrity score (from due diligence input): "
+                f"{format_ratio(due_diligence.get('management_integrity_score'), decimals=1, suffix='/10')}"  # type: ignore[reportArgumentType]
             )
 
     @staticmethod
@@ -222,17 +239,27 @@ class CAMGenerator:
         cross_validation: Dict[str, Any],
     ) -> None:
         doc.add_heading("SECTION 5: RISK ASSESSMENT", level=1)
-        doc.add_paragraph("Consolidated Risk Matrix:")
+        doc.add_paragraph("Consolidated risk matrix based on cross-validation anomalies and model explanation:")
         table = doc.add_table(rows=1, cols=3)
         table.style = "Table Grid"
         table.rows[0].cells[0].text = "Risk"
         table.rows[0].cells[1].text = "Impact"
         table.rows[0].cells[2].text = "Mitigation"
-        for risk in explanation.get("top_negative_factors", []):
+        for risk in explanation.get("top_negative_factors", [])[:5]:
             row = table.add_row().cells
             row[0].text = risk
             row[1].text = "Medium/High"
             row[2].text = "Quarterly covenant tracking and early warning triggers."
+        for anomaly in cross_validation.get("anomalies", [])[:6]:
+            row = table.add_row().cells
+            row[0].text = f"{anomaly.get('title', 'Anomaly')}: {anomaly.get('details', '')}"
+            row[1].text = str(anomaly.get("severity", "MEDIUM"))
+            row[2].text = "Targeted forensic validation and covenant tightening."
+        for indicator in cross_validation.get("fraud_indicators", [])[:4]:
+            row = table.add_row().cells
+            row[0].text = f"{indicator.get('indicator', 'Fraud indicator')} (source: {indicator.get('source', 'N/A')})"
+            row[1].text = str(indicator.get("severity", "HIGH"))
+            row[2].text = "Escalate to enhanced monitoring and transaction-level verification."
         doc.add_paragraph(
             "Overall data consistency score: "
             f"{format_percentage(cross_validation.get('overall_data_consistency_score'))}"
@@ -245,14 +272,30 @@ class CAMGenerator:
         research_narrative: str | None,
     ) -> None:
         doc.add_heading("SECTION 6: RESEARCH FINDINGS", level=1)
+        critical = [f for f in findings if str(f.get("severity")) in {"CRITICAL", "HIGH"}]
+        informational = [f for f in findings if str(f.get("severity")) not in {"CRITICAL", "HIGH"}]
+        doc.add_paragraph(
+            f"Total findings reviewed: {len(findings)} | "
+            f"Critical/High: {len(critical)} | Other: {len(informational)}"
+        )
         if research_narrative:
             doc.add_paragraph(research_narrative)
             doc.add_paragraph()
             doc.add_heading("Source Highlights", level=2)
-        for finding in findings[:10]:
-            doc.add_paragraph(
-                f"[{finding.get('severity')}] {finding.get('source_name')}: {finding.get('summary')}"
-            )
+        if critical:
+            doc.add_heading("Critical/High Priority Alerts", level=2)
+            for finding in critical[:6]:
+                doc.add_paragraph(
+                    f"[{finding.get('severity')}] {finding.get('source_name')}: "
+                    f"{finding.get('summary')} (URL: {finding.get('source_url', 'N/A')})"
+                )
+        if informational:
+            doc.add_heading("Contextual Findings", level=2)
+            for finding in informational[:4]:
+                doc.add_paragraph(
+                    f"[{finding.get('severity')}] {finding.get('source_name')}: "
+                    f"{finding.get('summary')} (URL: {finding.get('source_url', 'N/A')})"
+                )
 
     @staticmethod
     def _section_recommendation(
@@ -263,12 +306,17 @@ class CAMGenerator:
     ) -> None:
         doc.add_heading("SECTION 7: RECOMMENDATION", level=1)
         doc.add_paragraph(f"Final credit score: {decision.get('credit_score')}/900")
+        doc.add_paragraph(f"Normalized score: {decision.get('normalized_score', 'N/A')}/100")
+        doc.add_paragraph(f"Risk grade: {decision.get('risk_grade', 'N/A')}")
         doc.add_paragraph(f"Decision: {decision.get('recommendation')}")
         doc.add_paragraph(
             f"Recommended loan amount: {format_currency_cr(decision.get('recommended_loan_amount', 0))}"
         )
         doc.add_paragraph(
             f"Recommended interest rate: {decision.get('recommended_interest_rate', 0):.2f}% p.a."
+        )
+        doc.add_paragraph(
+            f"Interest premium: +{int(decision.get('interest_premium_bps', 0) or 0)} bps over benchmark"
         )
         doc.add_paragraph("Tenor: 36 months")
         validity_days = 30
@@ -288,13 +336,35 @@ class CAMGenerator:
             )
         doc.add_paragraph("AI Explainability Note:")
         doc.add_paragraph(explanation.get("decision_narrative", "No narrative available"))
+        if explanation.get("top_positive_factors"):
+            doc.add_paragraph("Top positive factors:")
+            for factor in explanation.get("top_positive_factors", [])[:3]:
+                doc.add_paragraph(f"- {factor}")
+        if explanation.get("top_negative_factors"):
+            doc.add_paragraph("Top risk factors:")
+            for factor in explanation.get("top_negative_factors", [])[:3]:
+                doc.add_paragraph(f"- {factor}")
 
     @staticmethod
-    def _section_mitigants(doc: Document) -> None:  # type: ignore[reportGeneralTypeIssues]
+    def _section_mitigants(
+        doc: Document,  # type: ignore[reportGeneralTypeIssues]
+        cross_validation: Dict[str, Any],
+        features: Dict[str, float],
+    ) -> None:
         doc.add_heading("SECTION 8: RISK MITIGANTS & CONDITIONS", level=1)
-        doc.add_paragraph("- Monthly stock and receivable statements")
-        doc.add_paragraph("- Quarterly GST-banking reconciliation")
-        doc.add_paragraph("- DSCR floor covenant at 1.2x")
+        covenants: List[str] = [
+            "Monthly stock and receivable statements to lender.",
+            "Quarterly GST vs banking reconciliation with management certification.",
+            "DSCR floor covenant at 1.20x; breach to trigger corrective action plan.",
+        ]
+        if float(features.get("gstr3b_vs_2a_itc_gap", 0.0) or 0.0) > 5:
+            covenants.append("Monthly GST ITC reconciliation submission until mismatch normalizes below 5%.")
+        if float(features.get("debt_equity_ratio", 0.0) or 0.0) > 1.5:
+            covenants.append("No incremental unsecured debt without lender approval.")
+        if cross_validation.get("fraud_indicators"):
+            covenants.append("Enhanced transaction monitoring on related-party and round-amount transfers.")
+        for covenant in covenants:
+            doc.add_paragraph(f"- {covenant}")
 
     @staticmethod
     def _section_annexures(
@@ -310,9 +380,7 @@ class CAMGenerator:
         for finding in findings[:20]:
             doc.add_paragraph(f"- {finding.get('source_url')}")
         doc.add_paragraph("Annexure C: SHAP explanation chart (placeholder)")
-        doc.add_paragraph(
-            f"SHAP top factors: {', '.join(list(explanation.get('shap_waterfall_data', {}).keys())[:10])}"
-        )
+        doc.add_paragraph(f"Top factors: {', '.join(list(explanation.get('shap_waterfall_data', {}).keys())[:10])}")
         doc.add_paragraph("Annexure D: Glossary of Indian credit terms")
         doc.add_paragraph("Annexure E: Decision Traceability and Governance")
         doc.add_paragraph(f"CAM generation date: {date.today().isoformat()}")

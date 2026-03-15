@@ -9,7 +9,6 @@ import {
   getIntegrationHealthV1,
   previewDueDiligenceV1,
   submitDueDiligenceV1,
-  triggerAnalysisV1,
   uploadDocumentsV1,
 } from '@/lib/api';
 
@@ -163,9 +162,6 @@ export default function UploadPage() {
       failedStep = 'uploading documents';
       await uploadDocumentsV1(companyId, files);
       setActiveStage(2);
-      failedStep = 'triggering pipeline';
-      await triggerAnalysisV1(companyId);
-      setActiveStage(3);
       await new Promise((resolve) => setTimeout(resolve, 250));
       advanceStep(); // step 0 → 1
       router.push('/app/notes');

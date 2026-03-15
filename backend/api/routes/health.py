@@ -41,9 +41,9 @@ async def health_integrations(
     - live=true: performs lightweight live calls
     """
     report: dict[str, dict] = {
-        "cerebras": {"configured": bool(settings.cerebras_api_key), "ok": False},
-        "gemini": {"configured": bool(settings.gemini_api_key), "ok": False, "role": "fallback"},
+        "llm_cerebras": {"configured": bool(settings.cerebras_api_key), "ok": False, "model": settings.cerebras_model},
         "tavily": {"configured": bool(settings.tavily_api_key), "ok": False},
+        "firecrawl": {"configured": bool(settings.firecrawl_api_key), "ok": False},
         "qwen_vl": {
             "configured": bool(settings.huggingface_api_token or settings.qwen_vl_api_key),
             "ok": False,
@@ -58,7 +58,7 @@ async def health_integrations(
     }
 
     if live:
-        # Gemini / free-LLM chain check
+        # Cerebras LLM check
         try:
             from backend.core.llm.llm_client import llm_call
 
@@ -67,7 +67,7 @@ async def health_integrations(
                 task="chat_rag",
                 max_tokens=40,
             )
-            report["gemini"].update(
+            report["llm_cerebras"].update(
                 {
                     "ok": True,
                     "provider": llm_resp.provider,
@@ -75,7 +75,7 @@ async def health_integrations(
                 }
             )
         except Exception as exc:
-            report["gemini"]["error"] = str(exc)
+            report["llm_cerebras"]["error"] = str(exc)
 
         # Tavily check
         try:
@@ -86,6 +86,16 @@ async def health_integrations(
             report["tavily"].update({"ok": True, "results": len(found)})
         except Exception as exc:
             report["tavily"]["error"] = str(exc)
+
+        # Firecrawl check
+        try:
+            from backend.core.research.firecrawl_client import FirecrawlClient
+
+            client = FirecrawlClient()
+            found = client.search("site:example.com", num_results=1)
+            report["firecrawl"].update({"ok": True, "results": len(found)})
+        except Exception as exc:
+            report["firecrawl"]["error"] = str(exc)
 
         # Qwen-VL OCR check
         try:

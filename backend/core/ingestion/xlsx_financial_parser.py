@@ -135,6 +135,8 @@ def parse_financial_statement_xlsx(file_path: str) -> Dict[str, Any]:
             revenue = _find_row_value(sheet, ["revenue from operations", "total revenue", "net revenue", "gross revenue"], value_col)
             if revenue is not None:
                 result["revenue_crore"] = revenue
+                result["annual_revenue_cr"] = revenue
+                result["revenue_cr"] = revenue
             pat = _find_row_value(sheet, ["profit after tax", "pat", "net profit", "profit for the year"], value_col)
             if pat is not None:
                 result["pat_crore"] = pat
