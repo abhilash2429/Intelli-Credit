@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAnalysisStore } from '@/store/analysisStore';
+import { signOut, useSession } from 'next-auth/react';
 
 const LINEAR_STEPS = [
   { step: 0, href: '/app/upload', label: 'Upload' },
@@ -35,8 +36,9 @@ export default function AppShellLayout({ children }: { children: React.ReactNode
   const pathname = usePathname();
   const router = useRouter();
   const { companyName, pipelineStep, canAccess, reset, _hasHydrated } = useAnalysisStore();
+  const { data: session } = useSession();
 
-  const isStartPage = pathname === '/app/start';
+  const isShelllessPage = pathname === '/app/start' || pathname === '/app/login';
   const isOutputPage = pipelineStep >= 3 && (ROUTE_STEP_MAP[pathname] === 3);
 
   // Hydration RouteGuard Wait Block
@@ -50,7 +52,7 @@ export default function AppShellLayout({ children }: { children: React.ReactNode
   }
 
   // RouteGuard Enforcement Logic
-  if (!isStartPage) {
+  if (!isShelllessPage) {
     const requiredStep = ROUTE_STEP_MAP[pathname];
     if (requiredStep !== undefined && !canAccess(requiredStep)) {
       const accessible = LINEAR_STEPS.filter((s) => canAccess(s.step));
@@ -64,7 +66,7 @@ export default function AppShellLayout({ children }: { children: React.ReactNode
   }
 
   // Don't render app shell for the /app/start page
-  if (isStartPage) {
+  if (isShelllessPage) {
     return <>{children}</>;
   }
 
@@ -167,6 +169,17 @@ export default function AppShellLayout({ children }: { children: React.ReactNode
               + New Assessment
             </button>
           )}
+          {session?.user?.email && (
+            <span className="font-mono text-[11px] text-ob-muted truncate max-w-[160px]">
+              {session.user.email}
+            </span>
+          )}
+          <button
+            onClick={() => signOut({ callbackUrl: '/app/login' })}
+            className="px-3 py-1.5 bg-ob-glass border border-ob-edge text-ob-text rounded-[100px] text-[11px] font-medium hover:bg-ob-glass2 hover:border-ob-edge2 transition-all"
+          >
+            Sign Out
+          </button>
           <span className="font-mono text-[12px] text-ob-muted truncate max-w-[180px]">
             {companyName ? `Assessing: ${companyName}` : ''}
           </span>

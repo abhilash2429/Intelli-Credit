@@ -1,26 +1,22 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { getToken } from 'next-auth/jwt';
 
-const GATED_ROUTES = [
-  '/app/upload',
-  '/app/notes',
-  '/app/pipeline',
-  '/app/score',
-  '/app/results',
-  '/app/explain',
-  '/app/chat',
-  '/app/cam',
-];
+const PUBLIC_ROUTES = ['/app/login'];
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const isGatedRoute = GATED_ROUTES.some((r) => pathname.startsWith(r));
+  const isPublic = PUBLIC_ROUTES.some((route) => pathname.startsWith(route));
 
-  if (isGatedRoute) {
-    const hasSession = request.cookies.get('ic_session');
-    if (!hasSession) {
-      return NextResponse.redirect(new URL('/app/start', request.url));
-    }
+  if (isPublic) {
+    return NextResponse.next();
+  }
+
+  const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
+  if (!token) {
+    const loginUrl = new URL('/app/login', request.url);
+    loginUrl.searchParams.set('next', pathname);
+    return NextResponse.redirect(loginUrl);
   }
 
   return NextResponse.next();

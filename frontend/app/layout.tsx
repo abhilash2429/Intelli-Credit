@@ -4,6 +4,7 @@ import './globals.css';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import AuthProvider from '@/components/AuthProvider';
 
 const MARKETING_LINKS = [
   { href: '/', label: 'Home' },
@@ -28,6 +29,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="description" content="AI-powered Credit Appraisal Engine for Indian Corporate Lending" />
       </head>
       <body className="bg-ob-bg text-ob-text antialiased">
+        <AuthProvider>
         {!isAppRoute && (
           <nav
             className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-[60px] py-[26px] transition-all duration-300"
@@ -58,7 +60,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </div>
 
             <Link
-              href="/app/start"
+              href="/app/login"
               className="text-[12px] font-medium tracking-[0.03em] text-ob-text bg-ob-glass border border-ob-edge px-[22px] py-[9px] rounded-full backdrop-blur-[20px] transition-all duration-200 hover:bg-ob-glass2 hover:border-ob-edge2 no-underline"
             >
               Get Started →
@@ -67,6 +69,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         )}
 
         <main>{children}</main>
+        </AuthProvider>
       </body>
     </html>
   );

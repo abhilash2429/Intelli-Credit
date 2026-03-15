@@ -31,7 +31,7 @@ export default function HeroPage() {
 
           <div className="flex gap-[10px] mb-[56px]">
             <Link
-              href="/app/start"
+              href="/app/login"
               className="bg-ob-text text-ob-bg font-body text-[13px] font-bold px-[32px] py-[13px] border-none rounded-[6px] tracking-[0.04em] transition-all duration-200 hover:bg-ob-cream no-underline"
             >
               Begin Assessment
@@ -177,7 +177,7 @@ export default function HeroPage() {
             </div>
             <div className="mt-[14px] pt-[12px] border-t border-ob-edge">
               <Link
-                href="/app/start"
+                href="/app/login"
                 className="block w-full text-center bg-ob-text text-ob-bg font-body text-[12px] font-bold px-4 py-[10px] rounded-[6px] tracking-[0.04em] no-underline hover:bg-ob-cream transition-all duration-200"
               >
                 Start an Assessment →

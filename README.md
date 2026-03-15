@@ -122,6 +122,12 @@ Detailed architecture: [ARCHITECTURE.md](./ARCHITECTURE.md)
 cp .env.example .env
 ```
 
+### 1b) Frontend Auth Env (Google)
+```bash
+cp frontend/.env.example frontend/.env
+```
+Fill `NEXTAUTH_URL`, `NEXTAUTH_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`.
+
 ### 2) Start infra
 ```bash
 docker run -d --name intelli_postgres -e POSTGRES_DB=intellicredit -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=password -p 5432:5432 postgres:16
@@ -160,6 +166,24 @@ Services:
 - Backend: `8000`
 - Celery worker: background
 - Frontend: `3000`
+
+## Authentication (Google OAuth)
+
+This app uses NextAuth with Google as the identity provider.
+
+### Google OAuth setup
+1. Create a Google Cloud project.
+2. Configure OAuth consent screen (External or Internal).
+3. Create OAuth Client ID (Web application).
+4. Add authorized redirect URIs:
+   - Local: `http://localhost:3000/api/auth/callback/google`
+   - Production: `https://YOUR_DOMAIN/api/auth/callback/google`
+
+### Frontend env vars
+- `NEXTAUTH_URL`: `http://localhost:3000` (or your production domain)
+- `NEXTAUTH_SECRET`: random 32+ char string
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
 
 ## Generate Demo Data
 

@@ -76,7 +76,6 @@ export default function StartPage() {
         collateral_value_cr: Number(loan.collateral_value_cr) || undefined,
       });
 
-      document.cookie = 'ic_session=1; path=/; max-age=86400';
       setCompany(companyId, entity.name.trim());
       setPipelineStep(0);
       router.push('/app/upload');
